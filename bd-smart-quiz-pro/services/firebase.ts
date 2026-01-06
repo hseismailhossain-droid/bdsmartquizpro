@@ -3,7 +3,6 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentSingleTabManager, terminate, clearIndexedDbPersistence } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
-export const storage = getStorage(app);
 
 const firebaseConfig = {
   apiKey: "AIzaSyCl3bpXS6rfxbbacSa8tkPGLpWrZhl03U8",
