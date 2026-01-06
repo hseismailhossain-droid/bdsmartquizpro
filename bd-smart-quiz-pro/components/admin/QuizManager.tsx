@@ -190,14 +190,22 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
         }
       }
 
-      if (editingId) { 
-        await updateDoc(doc(db, colName, editingId), data); 
-          alert("সফলভাবে সম্পন্ন হয়েছে!");
-      } else { data.timestamp = serverTimestamp(); await addDoc(collection(db, colName), data); }
+       if (editingId) {
+        await updateDoc(doc(db, colName, editingId), data);
+        alert("সফলভাবে আপডেট হয়েছে!");
+      } else {
+        data.timestamp = serverTimestamp();
+        await addDoc(collection(db, colName), data);
+        alert("সফলভাবে পাবলিশ হয়েছে!");
+      }
       
-    
-      resetForm(); setActiveMode('list');
-    } catch (e) { alert("ব্যর্থ হয়েছে!"); } finally { setIsPublishing(false); }
+      resetEditor();
+      setActiveMode('list');
+    } catch (e) { 
+      alert("অ্যাকশন ব্যর্থ হয়েছে!"); 
+    } finally { 
+      setIsPublishing(false); 
+    }
   };
 
   const resetEditor = () => {
@@ -247,7 +255,10 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
               { id: 'lesson', label: 'লিসন', icon: <FileText size={16}/> },
               { id: 'special', label: 'স্পেশাল', icon: <Star size={16}/> },
             ].map(type => (
-              <button key={type.id} onClick={() => { setQuizType(type.id as any); resetForm(); setActiveMode('list'); }} className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs transition-all ${quizType === type.id ? 'bg-slate-900 text-white shadow-xl' : 'bg-white border border-slate-100 text-slate-400 hover:border-slate-300'}`}>
+              <button key={type.id}
+                onClick={() => { setQuizType(type.id as any); resetForm(); setActiveMode('list'); }}
+                className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs transition-all ${quizType === type.id ? 'bg-slate-900 text-white shadow-xl' : 'bg-white border border-slate-100 text-slate-400 hover:border-slate-300'}`}
+                >
                 {type.icon} {type.label}
               </button>
             ))}
