@@ -1,0 +1,22 @@
+{
+  "name": "Smart Quiz Pro",
+  "short_name": "SmartQuiz",
+  "description": "BCS ও বিশ্ববিদ্যালয় ভর্তি প্রস্তুতির জন্য সেরা AI-চালিত কুইজ প্ল্যাটফর্ম।",
+  "id": "com.smartquiz.pro",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#065f46",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3407/3407024.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3407/3407024.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

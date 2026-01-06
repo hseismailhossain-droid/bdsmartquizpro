@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://my-quiz-m4fn.vercel.app/sitemap.xml
