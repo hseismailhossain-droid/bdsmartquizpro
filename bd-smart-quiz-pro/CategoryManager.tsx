@@ -1,11 +1,20 @@
-
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, LayoutGrid, Save, Loader2, Palette, Smile } from 'lucide-react';
+import { 
+  Plus, Trash2, LayoutGrid, Save, Loader2, Palette, 
+  GraduationCap, BookOpen, Book, School, Briefcase, 
+  Moon, Target, Star, ShieldCheck 
+} from 'lucide-react';
 import { db } from '../../services/firebase';
 import { collection, onSnapshot, query, orderBy, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import ConfirmModal from './ConfirmModal';
 
-const ICONS = ['GraduationCap', 'BookOpen', 'Book', 'School', 'Briefcase', 'Moon', 'LayoutGrid', 'Target', 'Star', 'ShieldCheck'];
+// আইকন ম্যাপ তৈরি যাতে নাম অনুযায়ী কম্পোনেন্ট রেন্ডার করা যায়
+const IconComponents: Record<string, any> = {
+  GraduationCap, BookOpen, Book, School, Briefcase, 
+  Moon, LayoutGrid, Target, Star, ShieldCheck
+};
+
+const ICONS = Object.keys(IconComponents);
 const COLORS = [
   'bg-indigo-500', 'bg-emerald-500', 'bg-rose-500', 'bg-orange-500', 
   'bg-purple-500', 'bg-blue-500', 'bg-teal-600', 'bg-slate-600', 'bg-amber-600'
@@ -24,6 +33,7 @@ const CategoryManager: React.FC = () => {
   });
 
   useEffect(() => {
+    // collection name 'exam_categories' আপনার App.tsx এর সাথে মিল থাকতে হবে
     const q = query(collection(db, 'exam_categories'), orderBy('timestamp', 'asc'));
     const unsub = onSnapshot(q, (snap) => {
       setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -43,9 +53,9 @@ const CategoryManager: React.FC = () => {
         timestamp: serverTimestamp()
       });
       setLabel('');
-      alert("নতুন কার্ড যুক্ত হয়েছে!");
+      alert("নতুন কার্ড যুক্ত হয়েছে!");
     } catch (e) {
-      alert("সেভ করতে সমস্যা হয়েছে");
+      alert("সেভ করতে সমস্যা হয়েছে");
     } finally {
       setIsSaving(false);
     }
@@ -56,8 +66,14 @@ const CategoryManager: React.FC = () => {
       await deleteDoc(doc(db, 'exam_categories', deleteConfirm.id));
       setDeleteConfirm({ show: false, id: '', title: '' });
     } catch (e) {
-      alert("মুছে ফেলতে সমস্যা হয়েছে।");
+      alert("মুছে ফেলতে সমস্যা হয়েছে।");
     }
+  };
+
+  // ডাইনামিক আইকন রেন্ডারার ফাংশন
+  const RenderIcon = ({ name, size = 18 }: { name: string, size?: number }) => {
+    const Icon = IconComponents[name] || LayoutGrid;
+    return <Icon size={size} />;
   };
 
   return (
@@ -76,6 +92,7 @@ const CategoryManager: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* ফর্ম সেকশন */}
         <div className="lg:col-span-1">
           <div className="bg-white p-8 rounded-[44px] shadow-sm border border-slate-100 space-y-6">
             <h3 className="font-black text-lg flex items-center gap-2 text-slate-800"><Plus className="text-emerald-700" /> নতুন কার্ড তৈরি</h3>
@@ -89,8 +106,8 @@ const CategoryManager: React.FC = () => {
               <label className="text-[10px] font-black text-slate-400 uppercase px-2">আইকন নির্বাচন</label>
               <div className="grid grid-cols-5 gap-2">
                 {ICONS.map(icon => (
-                  <button key={icon} onClick={() => setSelectedIcon(icon)} className={`p-3 rounded-xl border-2 transition-all ${selectedIcon === icon ? 'border-emerald-500 bg-emerald-50' : 'border-slate-50 bg-slate-50 text-slate-300'}`}>
-                    <LayoutGrid size={18} />
+                  <button key={icon} onClick={() => setSelectedIcon(icon)} className={`p-3 rounded-xl border-2 transition-all flex items-center justify-center ${selectedIcon === icon ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-50 bg-slate-50 text-slate-300'}`}>
+                    <RenderIcon name={icon} />
                   </button>
                 ))}
               </div>
@@ -111,25 +128,30 @@ const CategoryManager: React.FC = () => {
           </div>
         </div>
 
+        {/* লিস্ট সেকশন */}
         <div className="lg:col-span-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {categories.map(cat => (
-              <div key={cat.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between group hover:border-emerald-200 transition-all">
-                <div className="flex items-center gap-4">
-                  <div className={`w-14 h-14 ${cat.color} text-white rounded-[20px] flex items-center justify-center shadow-lg`}>
-                    <LayoutGrid size={24} />
+          {loading ? (
+             <div className="flex justify-center p-20"><Loader2 className="animate-spin text-emerald-700" size={40} /></div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {categories.map(cat => (
+                <div key={cat.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between group hover:border-emerald-200 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-14 h-14 ${cat.color} text-white rounded-[20px] flex items-center justify-center shadow-lg`}>
+                      <RenderIcon name={cat.iconName} size={24} />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-slate-900">{cat.label}</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{cat.iconName}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-black text-slate-900">{cat.label}</h4>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{cat.iconName}</p>
-                  </div>
+                  <button onClick={() => setDeleteConfirm({ show: true, id: cat.id, title: cat.label })} className="p-3 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all">
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-                <button onClick={() => setDeleteConfirm({ show: true, id: cat.id, title: cat.label })} className="p-3 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
