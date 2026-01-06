@@ -17,36 +17,45 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
   const [activeMode, setActiveMode] = useState<'create' | 'list'>('list');
   const [quizType, setQuizType] = useState<'mock' | 'paid' | 'live' | 'lesson' | 'special' | 'written'>(forcedType || 'mock');
   const [isPublishing, setIsPublishing] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState<any | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkJson, setBulkJson] = useState('');
 
   const [title, setTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [dynamicCategories, setDynamicCategories] = useState<ExamCategory[]>([]);
-  const [subject, setSubject] = useState('');
   
+// Subject States (New: Custom Subject Support)
+  const [subject, setSubject] = useState(SUBJECTS[0].title);
+  const [isCustomSubject, setIsCustomSubject] = useState(false);
+  const [customSubjectName, setCustomSubjectName] = useState('');
+  
+  // Date/Time States
   const [duration, setDuration] = useState('15');
-  const [entryFee, setEntryFee] = useState('0');
-  const [prizePool, setPrizePool] = useState('0');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [prizePool, setPrizePool] = useState('100');
+  const [entryFee, setEntryFee] = useState('10');
   
-  const [commonMediaUrl, setCommonMediaUrl] = useState('');
-  const [commonMediaType, setCommonMediaType] = useState<'image' | 'video' | 'none'>('none');
-  const [commonUploadProgress, setCommonUploadProgress] = useState<number | null>(null);
+   // Lesson Specific
   const [lessonContent, setLessonContent] = useState('');
+  const [lessonMediaUrl, setLessonMediaUrl] = useState('');
+  const [lessonMediaType, setLessonMediaType] = useState<'image' | 'video' | 'none'>('none');
 
+   // Question Builder States
   const [manualQuestions, setManualQuestions] = useState<Question[]>([]);
-  const [showBulkInput, setShowBulkInput] = useState(false);
-  const [bulkText, setBulkText] = useState('');
-  
   const [currentQ, setCurrentQ] = useState('');
-  const [qMarks, setQMarks] = useState('5');
   const [opts, setOpts] = useState(['', '', '', '']);
   const [correctIdx, setCorrectIdx] = useState<number | null>(null);
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaType, setMediaType] = useState<'image' | 'video' | 'none'>('none');
-  const [qUploadProgress, setQUploadProgress] = useState<number | null>(null);
   const [explanation, setExplanation] = useState('');
+  const [showBulkInput, setShowBulkInput] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [qMarks, setQMarks] = useState('5');
+  const [qUploadProgress, setQUploadProgress] = useState<number | null>(null);
+  
 
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, id: string, title: string}>({
@@ -181,18 +190,31 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
         }
       }
 
-      if (editingId) { await updateDoc(doc(db, colName, editingId), data); } 
-      else { data.timestamp = serverTimestamp(); await addDoc(collection(db, colName), data); }
+      if (editingId) { 
+        await updateDoc(doc(db, colName, editingId), data); 
+          alert("সফলভাবে সম্পন্ন হয়েছে!");
+      } else { data.timestamp = serverTimestamp(); await addDoc(collection(db, colName), data); }
       
-      alert("সফলভাবে সম্পন্ন হয়েছে!");
+    
       resetForm(); setActiveMode('list');
     } catch (e) { alert("ব্যর্থ হয়েছে!"); } finally { setIsPublishing(false); }
   };
 
-  const resetForm = () => {
-    setTitle(''); setSubject(''); setManualQuestions([]); setLessonContent(''); setCommonMediaUrl(''); 
-    setCommonMediaType('none'); setEditingId(null); setDuration('15'); setEntryFee('0'); 
-    setPrizePool('0'); setStartTime(''); setEndTime('');
+  const resetEditor = () => {
+    setTitle('');
+    setManualQuestions([]);
+    setLessonContent('');
+    setLessonMediaUrl('');
+    setLessonMediaType('none');
+    setEditingId(null);
+    setDuration('15');
+    setPrizePool('100');
+    setEntryFee('10');
+    setStartTime('');
+    setEndTime('');
+    setIsCustomSubject(false);
+    setCustomSubjectName('');
+    setCurrentQ(''); setOpts(['', '', '', '']); setCorrectIdx(null); setMediaUrl(''); setMediaType('none'); setExplanation('');
   };
 
   const executeDelete = async () => {
