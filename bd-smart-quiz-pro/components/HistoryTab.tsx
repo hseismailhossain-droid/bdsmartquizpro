@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Bookmark, AlertCircle, CheckCircle2, Trophy, Clock, HelpCircle, ArrowRight, XCircle, FileSignature, ChevronRight, ArrowLeft, Star, MessageSquare, Info, X, Trash2, Loader2 } from 'lucide-react';
 import { QuizResult, Question, WrittenSubmission } from '../types';
 import AdRenderer from './AdRenderer';
 import { db, auth } from '../services/firebase';
-import { collection, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, deleteDoc, doc, orderBy, limit } from 'firebase/firestore';
 import ConfirmModal from './admin/ConfirmModal';
 
 interface HistoryTabProps {
@@ -14,17 +13,38 @@ interface HistoryTabProps {
 const HistoryTab: React.FC<HistoryTabProps> = ({ history }) => {
   const [activeSubTab, setActiveSubTab] = useState<'marked' | 'mistakes' | 'exams' | 'written'>('exams');
   const [writtenSubmissions, setWrittenSubmissions] = useState<WrittenSubmission[]>([]);
+  const [mistakesList, setMistakesList] = useState<Question[]>([]);
+  const [bookmarksList, setBookmarksList] = useState<Question[]>([]);
   const [selectedWritten, setSelectedWritten] = useState<WrittenSubmission | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, id: string, collection: string}>({ show: false, id: '', collection: '' });
 
   useEffect(() => {
-    if (activeSubTab === 'written' && auth.currentUser) {
+    if (!auth.currentUser) return;
+
+    let unsub: () => void = () => {};
+
+    if (activeSubTab === 'written') {
+      // Removed orderBy to prevent index requirement error
       const q = query(collection(db, 'written_submissions'), where('uid', '==', auth.currentUser.uid));
-      const unsub = onSnapshot(q, (snap) => {
-        setWrittenSubmissions(snap.docs.map(d => ({ id: d.id, ...d.data() } as WrittenSubmission)));
-      });
-      return unsub;
+      unsub = onSnapshot(q, (snap) => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as WrittenSubmission));
+        // Client side sorting to bypass index requirement
+        list.sort((a: any, b: any) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        setWrittenSubmissions(list);
+      }, (err) => console.error("Written Listener Error:", err));
+    } else if (activeSubTab === 'mistakes') {
+      const q = query(collection(db, 'mistakes_practice'), where('uid', '==', auth.currentUser.uid), limit(50));
+      unsub = onSnapshot(q, (snap) => {
+        setMistakesList(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      }, (err) => console.error("Mistakes Listener Error:", err));
+    } else if (activeSubTab === 'marked') {
+      const q = query(collection(db, 'bookmarks'), where('uid', '==', auth.currentUser.uid), limit(50));
+      unsub = onSnapshot(q, (snap) => {
+        setBookmarksList(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      }, (err) => console.error("Bookmarks Listener Error:", err));
     }
+
+    return () => unsub();
   }, [activeSubTab]);
 
   const handleDelete = async () => {
@@ -53,7 +73,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ history }) => {
                <button onClick={() => setDeleteConfirm({ show: true, id: sub.id!, collection: 'written_submissions' })} className="absolute -top-2 -right-2 p-2 bg-white text-rose-500 rounded-full shadow-lg border border-rose-50 opacity-0 group-hover:opacity-100 transition-opacity z-10"><Trash2 size={14}/></button>
              </div>
            ))}
-           {writtenSubmissions.length === 0 && <EmptyState label="আপনি এখনো কোনো লিখিত পরীক্ষা দেননি" icon={<FileSignature size={32} />} />}
+           {writtenSubmissions.length === 0 && <EmptyState label="কোনো লিখিত পরীক্ষার রেকর্ড নেই" icon={<FileSignature size={32} />} />}
         </div>
       );
     }
@@ -83,41 +103,47 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ history }) => {
 
     if (activeSubTab === 'mistakes') {
       return (
-        <div className="space-y-4 p-5 pb-24">
-          {history.mistakes.map((q, i) => (
-            <div key={q.id || i} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative group">
-              <div className="flex justify-between items-start mb-3">
-                 <h4 className="font-bold text-slate-800 text-sm pr-10">{q.question}</h4>
-                 <button onClick={() => setDeleteConfirm({ show: true, id: q.id!, collection: 'mistakes_practice' })} className="p-2 text-rose-300 hover:text-rose-500 transition-colors shrink-0"><Trash2 size={16}/></button>
+        <div className="space-y-6 p-5 pb-24 animate-in fade-in">
+          {mistakesList.map((q, i) => (
+            <div key={q.id || i} className="bg-white p-8 rounded-[44px] border border-slate-100 shadow-sm relative group overflow-hidden animate-in slide-in-from-bottom-2">
+              <div className="flex justify-between items-start mb-6">
+                 <h4 className="font-black text-slate-800 text-lg leading-relaxed pr-10">{q.question}</h4>
+                 <button onClick={() => setDeleteConfirm({ show: true, id: q.id!, collection: 'mistakes_practice' })} className="p-3 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all shrink-0"><Trash2 size={18}/></button>
               </div>
-              <div className="bg-rose-50 p-3 rounded-xl border border-rose-100">
-                <p className="text-[10px] font-black text-rose-600 uppercase mb-1">সঠিক উত্তর:</p>
-                <p className="text-xs font-bold text-rose-800">{q.options[q.correctAnswer]}</p>
+              <div className="bg-rose-50/50 p-6 rounded-[32px] border border-rose-100">
+                <p className="text-[10px] font-black text-rose-500 uppercase mb-2 tracking-widest text-center">সঠিক উত্তর</p>
+                <p className="text-base font-black text-rose-900 text-center">{q.options[q.correctAnswer]}</p>
               </div>
             </div>
           ))}
-          {history.mistakes.length === 0 && <EmptyState label="কোনো ভুল উত্তরের হিস্ট্রি নেই" icon={<CheckCircle2 size={32} />} />}
+          {mistakesList.length === 0 && <EmptyState label="কোনো ভুল উত্তরের হিস্ট্রি নেই" icon={<XCircle size={32} />} />}
         </div>
       );
     }
 
     if (activeSubTab === 'marked') {
       return (
-        <div className="space-y-4 p-5 pb-24">
-          {history.marked.map((q, i) => (
-            <div key={q.id || i} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative group">
-              <div className="flex justify-between items-start mb-3">
-                 <h4 className="font-bold text-slate-800 text-sm pr-10">{q.question}</h4>
-                 <button onClick={() => setDeleteConfirm({ show: true, id: q.id!, collection: 'bookmarks' })} className="p-2 text-rose-300 hover:text-rose-500 transition-colors shrink-0"><Trash2 size={16}/></button>
+        <div className="space-y-6 p-5 pb-24 animate-in fade-in">
+          {bookmarksList.map((q, i) => (
+            <div key={q.id || i} className="bg-white p-8 rounded-[44px] border border-slate-100 shadow-sm relative group animate-in slide-in-from-bottom-2">
+              <div className="flex justify-between items-start mb-6">
+                 <h4 className="font-black text-slate-800 text-lg leading-relaxed pr-10">{q.question}</h4>
+                 <button onClick={() => setDeleteConfirm({ show: true, id: q.id!, collection: 'bookmarks' })} className="p-3 bg-amber-50 text-amber-600 rounded-2xl hover:bg-amber-500 hover:text-white transition-all shrink-0"><Trash2 size={18}/></button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                  {q.options.map((opt, idx) => (
-                   <div key={idx} className={`p-2.5 rounded-lg text-[11px] font-bold ${idx === q.correctAnswer ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-50 text-slate-400'}`}>{opt}</div>
+                   <div key={idx} className={`p-5 rounded-[22px] text-sm font-black text-center transition-all ${idx === q.correctAnswer ? 'bg-emerald-600 text-white shadow-lg border-emerald-600' : 'bg-slate-50 text-slate-400 border border-transparent'}`}>{opt}</div>
                  ))}
               </div>
+              {q.explanation && (
+                <div className="mt-6 p-5 bg-indigo-50 rounded-[28px] border border-indigo-100">
+                   <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1 text-center">ব্যাখ্যা</p>
+                   <p className="text-xs font-bold text-indigo-900 leading-relaxed text-center italic">{q.explanation}</p>
+                </div>
+              )}
             </div>
           ))}
-          {history.marked.length === 0 && <EmptyState label="বুকমার্ক করা কোনো প্রশ্ন নেই" icon={<Bookmark size={32} />} />}
+          {bookmarksList.length === 0 && <EmptyState label="বুকমার্ক করা কোনো প্রশ্ন নেই" icon={<Bookmark size={32} />} />}
         </div>
       );
     }
@@ -179,7 +205,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ history }) => {
   );
 
   return (
-    <div className="flex flex-col h-full bg-white font-hind overflow-hidden relative">
+    <div className="flex flex-col h-full bg-slate-50/30 font-hind overflow-hidden relative">
       <ConfirmModal 
         show={deleteConfirm.show}
         title="ডিলিট নিশ্চিত করুন"
@@ -187,9 +213,9 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ history }) => {
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirm({ show: false, id: '', collection: '' })}
       />
-      <div className="bg-white px-4 pt-8 pb-4 shrink-0 shadow-sm border-b">
-        <h2 className="text-2xl font-black text-slate-900 mb-6 text-center">আপনার অগ্রগতি</h2>
-        <div className="flex justify-center bg-slate-100 p-1.5 rounded-[22px] mx-auto shadow-inner border max-w-sm gap-1">
+      <div className="bg-white px-4 pt-10 pb-6 shrink-0 shadow-sm border-b">
+        <h2 className="text-3xl font-black text-slate-900 mb-8 text-center tracking-tight">আপনার অগ্রগতি</h2>
+        <div className="flex justify-center bg-slate-100 p-1.5 rounded-[26px] mx-auto shadow-inner border border-slate-200/50 max-w-sm gap-1">
           <HistorySubTab label="MCQ" active={activeSubTab === 'exams'} onClick={() => setActiveSubTab('exams')} />
           <HistorySubTab label="লিখন" active={activeSubTab === 'written'} onClick={() => setActiveSubTab('written')} />
           <HistorySubTab label="ভুল" active={activeSubTab === 'mistakes'} onClick={() => setActiveSubTab('mistakes')} />
@@ -202,13 +228,13 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ history }) => {
 };
 
 const HistorySubTab = ({ label, active, onClick }: { label: string, active: boolean, onClick: () => void }) => (
-  <button onClick={onClick} className={`flex-1 min-w-[70px] py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 ${active ? 'bg-white text-emerald-700 shadow-sm scale-105' : 'text-slate-400'}`}>{label}</button>
+  <button onClick={onClick} className={`flex-1 min-w-[70px] py-4 text-[10px] font-black uppercase tracking-[0.1em] rounded-2xl transition-all duration-300 ${active ? 'bg-white text-emerald-700 shadow-sm scale-105' : 'text-slate-400 hover:text-slate-600'}`}>{label}</button>
 );
 
 const EmptyState = ({ label, icon }: { label: string, icon: React.ReactNode }) => (
-  <div className="flex flex-col items-center justify-center text-center p-12 h-full opacity-80 min-h-[300px]">
-    <div className="bg-slate-50 w-20 h-20 rounded-[28px] flex items-center justify-center mb-6 shadow-inner text-slate-200">{icon}</div>
-    <p className="text-slate-300 font-black text-[11px] uppercase tracking-widest">{label}</p>
+  <div className="flex flex-col items-center justify-center text-center p-12 h-[60vh] opacity-80">
+    <div className="bg-white w-24 h-24 rounded-[36px] flex items-center justify-center mb-8 shadow-xl text-slate-200 border border-slate-50">{icon}</div>
+    <p className="text-slate-300 font-black text-xs uppercase tracking-[0.2em]">{label}</p>
   </div>
 );
 
