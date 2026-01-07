@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Loader2, BookOpen, Star, Zap, Image as ImageIcon, Video, X, ChevronRight, LayoutGrid, FileText, Clock, Calendar, Sparkles, Eye, CheckCircle2, Info, Edit3, Save, RotateCcw, PenTool, Pencil, FileCode, CheckSquare, Link as LinkIcon, AlertTriangle, FileSignature, ClipboardList, Database, Hash, Upload } from 'lucide-react';
-import { db, storage } from '../../services/firebase';
+import { db, storage, auth } from '../../services/firebase';
 import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, deleteDoc, limit, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { SUBJECTS } from '../../constants';
+import { SUBJECTS, ADMIN_EMAIL } from '../../constants';
 import { Question, ExamCategory } from '../../types';
 import ConfirmModal from './ConfirmModal';
 
@@ -18,35 +18,41 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
   const [quizType, setQuizType] = useState<'mock' | 'paid' | 'live' | 'lesson' | 'special' | 'written'>(forcedType || 'mock');
   const [isPublishing, setIsPublishing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showBulkInput, setShowBulkInput] = useState(false);
+  const [bulkText, setBulkText] = useState('');
 
   const [title, setTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [dynamicCategories, setDynamicCategories] = useState<ExamCategory[]>([]);
-  const [subject, setSubject] = useState('');
   
+  // Subject States
+  const [subject, setSubject] = useState(SUBJECTS[0]?.title || 'General');
+  
+  // Date/Time/Fee States
   const [duration, setDuration] = useState('15');
-  const [entryFee, setEntryFee] = useState('0');
-  const [prizePool, setPrizePool] = useState('0');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [prizePool, setPrizePool] = useState('100');
+  const [entryFee, setEntryFee] = useState('10');
   
+  // Media States
   const [commonMediaUrl, setCommonMediaUrl] = useState('');
   const [commonMediaType, setCommonMediaType] = useState<'image' | 'video' | 'none'>('none');
   const [commonUploadProgress, setCommonUploadProgress] = useState<number | null>(null);
+
+  // Lesson Specific
   const [lessonContent, setLessonContent] = useState('');
 
+  // Question Builder States
   const [manualQuestions, setManualQuestions] = useState<Question[]>([]);
-  const [showBulkInput, setShowBulkInput] = useState(false);
-  const [bulkText, setBulkText] = useState('');
-  
   const [currentQ, setCurrentQ] = useState('');
-  const [qMarks, setQMarks] = useState('5');
   const [opts, setOpts] = useState(['', '', '', '']);
   const [correctIdx, setCorrectIdx] = useState<number | null>(null);
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaType, setMediaType] = useState<'image' | 'video' | 'none'>('none');
-  const [qUploadProgress, setQUploadProgress] = useState<number | null>(null);
   const [explanation, setExplanation] = useState('');
+  const [qMarks, setQMarks] = useState('5');
+  const [qUploadProgress, setQUploadProgress] = useState<number | null>(null);
 
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, id: string, title: string}>({
@@ -94,7 +100,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
       }, 
       (error) => {
         console.error("Upload failed:", error);
-        alert("আপলোড ব্যর্থ হয়েছে। পুনরায় চেষ্টা করুন।");
+        alert("আপলোড ব্যর্থ হয়েছে।");
         setProgress(null);
       }, 
       async () => {
@@ -141,8 +147,8 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
       question: currentQ.trim(), 
       options: isWritten ? [] : [...opts], 
       correctAnswer: isWritten ? 0 : (correctIdx || 0),
-      explanation: explanation.trim() || undefined,
-      mediaUrl: mediaUrl.trim() || undefined,
+      explanation: explanation.trim() || "",
+      mediaUrl: mediaUrl.trim() || "",
       mediaType: mediaUrl.trim() ? (mediaType === 'none' ? 'image' : mediaType) : 'none',
       marks: isWritten ? Number(qMarks) : undefined
     };
@@ -151,48 +157,115 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
   };
 
   const handlePublish = async () => {
-    if (!title.trim() || !subject.trim()) return alert("টাইটেল ও সাবজেক্ট দিন।");
+    // 1. Auth Check
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      alert("আপনি লগইন করা নেই! দয়া করে লগইন করুন।");
+      return;
+    }
+    if (currentUser.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+      alert("আপনার কাছে এই কাজটি করার অনুমতি নেই! শুধুমাত্র অ্যাডমিন এটি করতে পারে।");
+      return;
+    }
+
+    if (!title.trim()) return alert("টাইটেল দিন।");
     if (quizType === 'lesson' && !lessonContent.trim()) return alert("লিসন কন্টেন্ট দিন।");
     if (quizType !== 'lesson' && manualQuestions.length === 0) return alert("অন্তত একটি প্রশ্ন যোগ করুন।");
 
     setIsPublishing(true);
-    const colName = quizType === 'paid' ? 'paid_quizzes' : quizType === 'live' ? 'live_quizzes' : quizType === 'special' ? 'admin_special_quizzes' : quizType === 'lesson' ? 'lessons' : quizType === 'written' ? 'written_quizzes' : 'mock_quizzes';
+    const colName = 
+      quizType === 'paid' ? 'paid_quizzes' : 
+      quizType === 'live' ? 'live_quizzes' : 
+      quizType === 'special' ? 'admin_special_quizzes' : 
+      quizType === 'lesson' ? 'lessons' : 
+      quizType === 'written' ? 'written_quizzes' : 'mock_quizzes';
 
     try {
+      // 2. Data Sanitization (No undefined allowed)
+      const sanitizedQuestions = manualQuestions.map(q => {
+        const cleanQ: any = {
+          question: q.question || "",
+          options: Array.isArray(q.options) ? q.options : [],
+          correctAnswer: Number(q.correctAnswer) || 0,
+          explanation: q.explanation || "",
+          mediaUrl: q.mediaUrl || "",
+          mediaType: q.mediaType || "none"
+        };
+        if (q.marks !== undefined) cleanQ.marks = Number(q.marks);
+        return cleanQ;
+      });
+
       const data: any = {
-        title, subject: subject.trim(),
-        category: selectedCategory || (dynamicCategories[0]?.label || ''),
-        mediaUrl: commonMediaUrl.trim() || null,
-        mediaType: commonMediaUrl.trim() ? commonMediaType : 'none',
+        title: title.trim(), 
+        subject: subject.trim(),
+        category: selectedCategory || (dynamicCategories[0]?.label || 'General'),
+        mediaUrl: commonMediaUrl || "",
+        mediaType: commonMediaUrl ? commonMediaType : 'none',
+        startTime: startTime || "", // Default to empty string instead of null/undefined
+        endTime: endTime || "",
+        type: quizType,
         updatedAt: serverTimestamp()
       };
 
-      if (quizType === 'lesson') { data.content = lessonContent; } 
-      else {
-        data.duration = Number(duration);
-        data.manualQuestions = manualQuestions;
-        data.questionsCount = manualQuestions.length;
+      if (quizType === 'lesson') { 
+        data.content = lessonContent || ""; 
+        data.questionsCount = 0;
+      } else {
+        data.duration = Number(duration) || 15;
+        data.manualQuestions = sanitizedQuestions;
+        data.questionsCount = sanitizedQuestions.length;
         data.status = 'active';
-        data.entryFee = Number(entryFee);
-        data.prizePool = Number(prizePool);
+        data.entryFee = Number(entryFee) || 0;
+        data.prizePool = Number(prizePool) || 0;
         data.isPaid = Number(entryFee) > 0;
-        if (['paid', 'live', 'written', 'special'].includes(quizType)) {
-          data.startTime = startTime || null; data.endTime = endTime || null;
-        }
       }
 
-      if (editingId) { await updateDoc(doc(db, colName, editingId), data); } 
-      else { data.timestamp = serverTimestamp(); await addDoc(collection(db, colName), data); }
+      // 3. Database Operation
+      if (editingId) {
+        const docRef = doc(db, colName, editingId);
+        await updateDoc(docRef, data);
+        alert("সফলভাবে আপডেট হয়েছে!");
+      } else {
+        data.timestamp = serverTimestamp();
+        await addDoc(collection(db, colName), data);
+        alert("সফলভাবে পাবলিশ হয়েছে!");
+      }
       
-      alert("সফলভাবে সম্পন্ন হয়েছে!");
-      resetForm(); setActiveMode('list');
-    } catch (e) { alert("ব্যর্থ হয়েছে!"); } finally { setIsPublishing(false); }
+      resetForm();
+      setActiveMode('list');
+    } catch (e: any) { 
+      console.error("Publish Error:", e);
+      if (e.code === 'permission-denied') {
+        alert("Permission Denied: আপনার ফায়ারবেস সিকিউরিটি রুলস এই রিকোয়েস্টটি ব্লক করেছে। দয়া করে নিশ্চিত করুন আপনি admin@smartquiz.com ইমেইল দিয়ে লগইন করেছেন।");
+      } else {
+        alert("পাবলিশ ব্যর্থ হয়েছে! এরর: " + (e.message || "Unknown error"));
+      }
+    } finally { 
+      setIsPublishing(false); 
+    }
   };
 
   const resetForm = () => {
-    setTitle(''); setSubject(''); setManualQuestions([]); setLessonContent(''); setCommonMediaUrl(''); 
-    setCommonMediaType('none'); setEditingId(null); setDuration('15'); setEntryFee('0'); 
-    setPrizePool('0'); setStartTime(''); setEndTime('');
+    setTitle('');
+    setManualQuestions([]);
+    setLessonContent('');
+    setCommonMediaUrl('');
+    setCommonMediaType('none');
+    setEditingId(null);
+    setDuration('15');
+    setPrizePool('100');
+    setEntryFee('10');
+    setStartTime('');
+    setEndTime('');
+    setCurrentQ(''); 
+    setOpts(['', '', '', '']); 
+    setCorrectIdx(null); 
+    setMediaUrl(''); 
+    setMediaType('none'); 
+    setExplanation('');
+    setQMarks('5');
+    setSubject(SUBJECTS[0]?.title || 'General');
+    setSelectedCategory('');
   };
 
   const executeDelete = async () => {
@@ -200,7 +273,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
       await onDeleteQuiz(deleteConfirm.id, quizType);
       setDeleteConfirm({ show: false, id: '', title: '' });
     } catch (e) {
-      alert("ডিলিট করতে সমস্যা হয়েছে।");
+      alert("মুছে ফেলতে সমস্যা হয়েছে।");
     }
   };
 
@@ -224,8 +297,12 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
               { id: 'live', label: 'লাইভ এক্সাম', icon: <Clock size={16}/> },
               { id: 'lesson', label: 'লিসন', icon: <FileText size={16}/> },
               { id: 'special', label: 'স্পেশাল', icon: <Star size={16}/> },
+              { id: 'written', label: 'লিখিত', icon: <FileSignature size={16}/> },
             ].map(type => (
-              <button key={type.id} onClick={() => { setQuizType(type.id as any); resetForm(); setActiveMode('list'); }} className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs transition-all ${quizType === type.id ? 'bg-slate-900 text-white shadow-xl' : 'bg-white border border-slate-100 text-slate-400 hover:border-slate-300'}`}>
+              <button key={type.id}
+                onClick={() => { setQuizType(type.id as any); resetForm(); setActiveMode('list'); }}
+                className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs transition-all ${quizType === type.id ? 'bg-slate-900 text-white shadow-xl' : 'bg-white border border-slate-100 text-slate-400 hover:border-slate-300'}`}
+                >
                 {type.icon} {type.label}
               </button>
             ))}
@@ -265,6 +342,17 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 px-2 uppercase">কার্ড ক্যাটাগরি</label><select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border border-slate-100"><option value="">সিলেক্ট করুন</option>{dynamicCategories.map(c => <option key={c.id} value={c.label}>{c.label}</option>)}</select></div>
               <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">কাউন্টডাউন সময় (মিনিট)</label><input type="number" value={duration} onChange={e => setDuration(e.target.value)} className="w-full bg-slate-50 p-5 rounded-2xl font-black outline-none border border-slate-100" /></div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-8 rounded-[36px] border border-slate-100">
+               <div className="space-y-2">
+                  <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest px-2 flex items-center gap-2"><Calendar size={12}/> শুরুর সময় (Start Date/Time)</label>
+                  <input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full bg-white p-4 rounded-xl font-bold outline-none border border-emerald-100" />
+               </div>
+               <div className="space-y-2">
+                  <label className="text-[10px] font-black text-rose-600 uppercase tracking-widest px-2 flex items-center gap-2"><Calendar size={12}/> শেষ সময় (End Date/Time)</label>
+                  <input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full bg-white p-4 rounded-xl font-bold outline-none border border-rose-100" />
+               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-8">
@@ -420,7 +508,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
             <div key={q.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-xl transition-all group">
               <div>
                  <div className="flex justify-between items-start mb-4">
-                   <span className="text-[9px] font-black bg-slate-100 text-slate-400 px-3 py-1 rounded-full uppercase tracking-widest">{quizType}</span>
+                   <span className="text-[9px] font-black bg-slate-100 text-slate-400 px-3 py-1 rounded-full uppercase tracking-widest">{q.type || quizType}</span>
                    {q.entryFee > 0 ? (
                      <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100/50">Paid: ৳{q.entryFee}</span>
                    ) : (
@@ -428,13 +516,18 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
                    )}
                  </div>
                  <h5 className="font-black text-slate-800 text-lg leading-tight mb-3 line-clamp-2">{q.title}</h5>
-                 <div className="flex flex-wrap items-center gap-4">
+                 <div className="flex flex-col gap-2 mt-4">
                     <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                        <Clock size={14} className="text-slate-300"/> {q.duration || 15} মিনিট
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                        <LayoutGrid size={14} className="text-slate-300"/> {q.questionsCount || 0} টি প্রশ্ন
                     </div>
+                    {q.startTime && (
+                      <div className="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 uppercase">
+                         <Calendar size={12}/> Start: {new Date(q.startTime).toLocaleString('bn-BD')}
+                      </div>
+                    )}
                  </div>
               </div>
               <div className="flex gap-3 mt-10">
@@ -452,6 +545,8 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
                     setCommonMediaUrl(q.mediaUrl || '');
                     setCommonMediaType(q.mediaType || 'none');
                     setSelectedCategory(q.category || '');
+                    setStartTime(q.startTime || '');
+                    setEndTime(q.endTime || '');
                     setActiveMode('create'); 
                   }} 
                   className="flex-1 p-4.5 bg-emerald-50 text-emerald-700 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2 font-black text-sm"
