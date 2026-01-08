@@ -1,8 +1,9 @@
-
 import React, { useState } from 'react';
-import { CreditCard, Check, X, Clock, User, Phone, Wallet, AlertCircle, Trash2 } from 'lucide-react';
+import { CreditCard, Check, X, Clock, User, Phone, Wallet, AlertCircle, Trash2, Loader2 } from 'lucide-react';
 import { WithdrawRequest } from '../../types';
 import ConfirmModal from './ConfirmModal';
+import { db } from '../../services/firebase';
+import { doc, updateDoc, writeBatch, increment, serverTimestamp, collection, deleteDoc } from 'firebase/firestore';
 
 interface WithdrawManagerProps {
   requests: WithdrawRequest[];
@@ -11,10 +12,105 @@ interface WithdrawManagerProps {
   onDelete: (id: string) => void;
 }
 
-const WithdrawManager: React.FC<WithdrawManagerProps> = ({ requests, onApprove, onReject, onDelete }) => {
-  const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, id: string, title: string}>({
-    show: false, id: '', title: ''
+const WithdrawManager: React.FC<WithdrawManagerProps> = ({ requests }) => {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
   });
+
+  const executeApprove = async (req: WithdrawRequest) => {
+    setIsProcessing(true);
+    try {
+      const batch = writeBatch(db);
+      
+      // 1. Deduct from User Balance
+      const userRef = doc(db, 'users', req.uid);
+      batch.update(userRef, { balance: increment(-req.amount) });
+      
+      // 2. Update Request Status
+      const reqRef = doc(db, 'withdraw_requests', req.id);
+      batch.update(reqRef, { status: 'approved', processedAt: serverTimestamp() });
+      
+      // 3. Log Transaction
+      const logRef = doc(collection(db, 'transactions'));
+      batch.set(logRef, {
+        uid: req.uid,
+        userName: req.userName,
+        amount: req.amount,
+        type: 'withdraw',
+        method: req.method,
+        status: 'success',
+        timestamp: serverTimestamp()
+      });
+
+      await batch.commit();
+      alert("উইথড্র সফলভাবে অ্যাপ্রুভ হয়েছে এবং ইউজারের ব্যালেন্স থেকে টাকা কেটে নেওয়া হয়েছে।");
+    } catch (e: any) {
+      console.error(e);
+      alert("অপারেশন ব্যর্থ হয়েছে।");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const executeReject = async (id: string) => {
+    setIsProcessing(true);
+    try {
+      await updateDoc(doc(db, 'withdraw_requests', id), { 
+        status: 'rejected', 
+        processedAt: serverTimestamp() 
+      });
+      alert("রিকোয়েস্ট রিজেক্ট করা হয়েছে।");
+    } catch (e) {
+      alert("অপারেশন ব্যর্থ হয়েছে।");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const executeDelete = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'withdraw_requests', id));
+      alert("রেকর্ডটি ডিলিট করা হয়েছে।");
+    } catch (e) {
+      alert("ডিলিট করতে সমস্যা হয়েছে।");
+    }
+  };
+
+  const handleApproveWithdraw = (req: WithdrawRequest) => {
+    setConfirmState({
+      show: true,
+      title: 'উইথড্র অ্যাপ্রুভ',
+      message: `আপনি কি নিশ্চিতভাবে ৳${req.amount} উইথড্র রিকোয়েস্টটি অ্যাপ্রুভ করতে চান?`,
+      onConfirm: () => executeApprove(req),
+    });
+  };
+
+  const handleRejectWithdraw = (id: string) => {
+    setConfirmState({
+      show: true,
+      title: 'উইথড্র রিজেক্ট',
+      message: 'আপনি কি এই উইথড্র রিকোয়েস্টটি রিজেক্ট করতে চান?',
+      onConfirm: () => executeReject(id),
+    });
+  };
+
+  const handleDeleteRequest = (id: string, name: string) => {
+    setConfirmState({
+      show: true,
+      title: 'ডিলিট নিশ্চিত করুন',
+      message: `আপনি কি নিশ্চিতভাবে "${name}" এর রেকর্ডটি ডিলিট করতে চান?`,
+      onConfirm: () => executeDelete(id),
+    });
+  };
 
   const pendingRequests = requests.filter(r => r.status === 'pending');
   const otherRequests = requests.filter(r => r.status !== 'pending');
@@ -22,14 +118,11 @@ const WithdrawManager: React.FC<WithdrawManagerProps> = ({ requests, onApprove, 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 font-['Hind_Siliguri'] pb-20">
       <ConfirmModal 
-        show={deleteConfirm.show}
-        title="রিকোয়েস্ট ডিলিট করুন"
-        message={`আপনি কি নিশ্চিতভাবে এই উইথড্র রিকোয়েস্টটি ডিলিট করতে চান?`}
-        onConfirm={() => {
-          onDelete(deleteConfirm.id);
-          setDeleteConfirm({ show: false, id: '', title: '' });
-        }}
-        onCancel={() => setDeleteConfirm({ show: false, id: '', title: '' })}
+        show={confirmState.show}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState(prev => ({ ...prev, show: false }))}
       />
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -72,16 +165,18 @@ const WithdrawManager: React.FC<WithdrawManagerProps> = ({ requests, onApprove, 
 
               <div className="flex gap-3">
                 <button 
-                  onClick={() => onReject(req.id)}
+                  disabled={isProcessing}
+                  onClick={() => handleRejectWithdraw(req.id)}
                   className="px-6 py-4 bg-rose-50 text-rose-600 rounded-2xl font-black text-sm hover:bg-rose-600 hover:text-white transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                   <X size={18} /> রিজেক্ট
                 </button>
                 <button 
-                  onClick={() => onApprove(req.id)}
+                  disabled={isProcessing}
+                  onClick={() => handleApproveWithdraw(req)}
                   className="px-6 py-4 bg-emerald-700 text-white rounded-2xl font-black text-sm shadow-xl shadow-emerald-700/20 hover:bg-emerald-800 transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
-                  <Check size={18} /> অ্যাপ্রুভ
+                  {isProcessing ? <Loader2 size={18} className="animate-spin"/> : <><Check size={18} /> এপ্রুভ</>}
                 </button>
               </div>
             </div>
@@ -106,11 +201,11 @@ const WithdrawManager: React.FC<WithdrawManagerProps> = ({ requests, onApprove, 
                 </div>
                 <div>
                   <p className="font-black text-slate-900 text-sm">{req.userName}</p>
-                  <p className="text-[10px] font-bold text-slate-400">৳{req.amount} • {req.status.toUpperCase()}</p>
+                  <p className="text-[10px] font-bold text-slate-400">৳{req.amount} • {req.status === 'approved' ? 'APPROVED' : 'REJECTED'}</p>
                 </div>
               </div>
               <button 
-                onClick={() => setDeleteConfirm({ show: true, id: req.id, title: req.userName })}
+                onClick={() => handleDeleteRequest(req.id, req.userName)}
                 className="p-3 bg-white text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all opacity-0 group-hover:opacity-100 shadow-sm"
               >
                 <Trash2 size={16} />
