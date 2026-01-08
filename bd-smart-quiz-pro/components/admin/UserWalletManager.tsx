@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, Wallet, Check, X, Search, User, Edit3, Loader2, Save, ShieldCheck, Trash2, Trophy } from 'lucide-react';
 import { DepositRequest, UserProfile, Category } from '../../types';
 import { db } from '../../services/firebase';
-import { collection, onSnapshot, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, doc, updateDoc, deleteDoc, writeBatch, increment, serverTimestamp } from 'firebase/firestore';
+import ConfirmModal from './ConfirmModal';
 
 interface UserWalletManagerProps {
   requests: DepositRequest[];
@@ -11,13 +11,26 @@ interface UserWalletManagerProps {
   onReject: (id: string) => void;
 }
 
-const UserWalletManager: React.FC<UserWalletManagerProps> = ({ requests, onApprove, onReject }) => {
+const UserWalletManager: React.FC<UserWalletManagerProps> = ({ requests }) => {
   const [view, setView] = useState<'users' | 'requests'>('requests');
   const [users, setUsers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  const [confirmState, setConfirmState] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     if (view === 'users') {
@@ -34,6 +47,84 @@ const UserWalletManager: React.FC<UserWalletManagerProps> = ({ requests, onAppro
     }
   }, [view]);
 
+  const executeApprove = async (req: DepositRequest) => {
+    setIsProcessing(true);
+    try {
+      const batch = writeBatch(db);
+      const userRef = doc(db, 'users', req.uid);
+      batch.update(userRef, { balance: increment(req.amount) });
+      const reqRef = doc(db, 'deposit_requests', req.id);
+      batch.update(reqRef, { status: 'approved', processedAt: serverTimestamp() });
+      const logRef = doc(collection(db, 'transactions'));
+      batch.set(logRef, {
+        uid: req.uid,
+        userName: req.userName,
+        amount: req.amount,
+        type: 'deposit',
+        method: req.method,
+        status: 'success',
+        timestamp: serverTimestamp()
+      });
+      await batch.commit();
+      alert("ডিপোজিট সফলভাবে অ্যাপ্রুভ করা হয়েছে!");
+    } catch (e) {
+      alert("অপারেশন ব্যর্থ হয়েছে।");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const executeReject = async (id: string) => {
+    setIsProcessing(true);
+    try {
+      await updateDoc(doc(db, 'deposit_requests', id), { 
+        status: 'rejected', 
+        processedAt: serverTimestamp() 
+      });
+      alert("রিকোয়েস্ট রিজেক্ট করা হয়েছে।");
+    } catch (e) {
+      alert("অপারেশন ব্যর্থ হয়েছে।");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const executeDelete = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'deposit_requests', id));
+      alert("রেকর্ডটি ডিলিট করা হয়েছে।");
+    } catch (e) {
+      alert("ডিলিট ব্যর্থ হয়েছে।");
+    }
+  };
+
+  const handleApproveRequest = (req: DepositRequest) => {
+    setConfirmState({
+      show: true,
+      title: 'অ্যাপ্রুভ নিশ্চিত করুন',
+      message: `আপনি কি নিশ্চিতভাবে ৳${req.amount} ডিপোজিট রিকোয়েস্টটি অ্যাপ্রুভ করতে চান?`,
+      onConfirm: () => executeApprove(req),
+    });
+  };
+
+  const handleRejectRequest = (id: string) => {
+    setConfirmState({
+      show: true,
+      title: 'রিজেক্ট নিশ্চিত করুন',
+      message: 'আপনি কি নিশ্চিতভাবে এই ডিপোজিট রিকোয়েস্টটি রিজেক্ট করতে চান?',
+      onConfirm: () => executeReject(id),
+    });
+  };
+
+  const handleDeleteRequest = (id: string, name: string) => {
+    setConfirmState({
+      show: true,
+      title: 'ডিলিট নিশ্চিত করুন',
+      message: `আপনি কি নিশ্চিতভাবে "${name}" এর এই ডিপোজিট রেকর্ডটি ডিলিট করতে চান?`,
+      onConfirm: () => executeDelete(id),
+    });
+  };
+
   const handleUpdateUser = async () => {
     if (!editingUser) return;
     setIsUpdating(true);
@@ -48,8 +139,7 @@ const UserWalletManager: React.FC<UserWalletManagerProps> = ({ requests, onAppro
       alert("ইউজারের তথ্য সফলভাবে আপডেট হয়েছে!");
       setEditingUser(null);
     } catch (e) {
-      console.error(e);
-      alert("আপডেট ব্যর্থ হয়েছে। পারমিশন চেক করুন।");
+      alert("আপডেট ব্যর্থ হয়েছে।");
     } finally {
       setIsUpdating(false);
     }
@@ -63,6 +153,14 @@ const UserWalletManager: React.FC<UserWalletManagerProps> = ({ requests, onAppro
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 font-['Hind_Siliguri'] pb-20">
+      <ConfirmModal 
+        show={confirmState.show}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={confirmState.onConfirm}
+        onCancel={() => setConfirmState(prev => ({ ...prev, show: false }))}
+      />
+      
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h2 className="text-3xl font-black text-slate-900 leading-tight">ইউজার ও ওয়ালেট</h2>
@@ -93,8 +191,9 @@ const UserWalletManager: React.FC<UserWalletManagerProps> = ({ requests, onAppro
                     <td className="px-8 py-6 font-black text-emerald-700">৳{req.amount} <span className="text-[10px] uppercase ml-1 opacity-50">{req.method}</span></td>
                     <td className="px-8 py-6 font-mono text-xs">{req.trxId}</td>
                     <td className="px-8 py-6 text-right space-x-2">
-                      <button onClick={() => onReject(req.id)} className="p-2.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all"><X size={18}/></button>
-                      <button onClick={() => onApprove(req.id)} className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all"><Check size={18}/></button>
+                      <button disabled={isProcessing} onClick={() => handleDeleteRequest(req.id, req.userName)} className="p-2 text-rose-300 hover:text-rose-500 transition-colors"><Trash2 size={18}/></button>
+                      <button disabled={isProcessing} onClick={() => handleRejectRequest(req.id)} className="p-3 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm"><X size={20}/></button>
+                      <button disabled={isProcessing} onClick={() => handleApproveRequest(req)} className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><Check size={20}/></button>
                     </td>
                   </tr>
                 ))}
