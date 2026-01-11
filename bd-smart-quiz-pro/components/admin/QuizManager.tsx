@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Loader2, BookOpen, Star, Zap, Image as ImageIcon, Video, X, ChevronRight, LayoutGrid, FileText, Clock, Calendar, Sparkles, Eye, CheckCircle2, Info, Edit3, Save, RotateCcw, PenTool, Pencil, FileCode, CheckSquare, Link as LinkIcon, AlertTriangle, FileSignature, ClipboardList, Database, Hash, Upload } from 'lucide-react';
 import { db, storage, auth } from '../../services/firebase';
@@ -9,11 +8,11 @@ import { Question, ExamCategory } from '../../types';
 import ConfirmModal from './ConfirmModal';
 
 interface QuizManagerProps {
-  onDeleteQuiz: any;
+  onDeleteQuiz?: any;
   forcedType?: 'mock' | 'paid' | 'live' | 'lesson' | 'special' | 'written';
 }
 
-const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) => {
+const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
   const [activeMode, setActiveMode] = useState<'create' | 'list'>('list');
   const [quizType, setQuizType] = useState<'mock' | 'paid' | 'live' | 'lesson' | 'special' | 'written'>(forcedType || 'mock');
   const [isPublishing, setIsPublishing] = useState(false);
@@ -25,25 +24,19 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
   const [selectedCategory, setSelectedCategory] = useState('');
   const [dynamicCategories, setDynamicCategories] = useState<ExamCategory[]>([]);
   
-  // Subject States
   const [subject, setSubject] = useState(SUBJECTS[0]?.title || 'General');
-  
-  // Date/Time/Fee States
   const [duration, setDuration] = useState('15');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [prizePool, setPrizePool] = useState('100');
   const [entryFee, setEntryFee] = useState('10');
   
-  // Media States
   const [commonMediaUrl, setCommonMediaUrl] = useState('');
   const [commonMediaType, setCommonMediaType] = useState<'image' | 'video' | 'none'>('none');
   const [commonUploadProgress, setCommonUploadProgress] = useState<number | null>(null);
 
-  // Lesson Specific
   const [lessonContent, setLessonContent] = useState('');
 
-  // Question Builder States
   const [manualQuestions, setManualQuestions] = useState<Question[]>([]);
   const [currentQ, setCurrentQ] = useState('');
   const [opts, setOpts] = useState(['', '', '', '']);
@@ -157,17 +150,8 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
   };
 
   const handlePublish = async () => {
-    // 1. Auth Check
     const currentUser = auth.currentUser;
-    if (!currentUser) {
-      alert("আপনি লগইন করা নেই! দয়া করে লগইন করুন।");
-      return;
-    }
-    if (currentUser.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-      alert("আপনার কাছে এই কাজটি করার অনুমতি নেই! শুধুমাত্র অ্যাডমিন এটি করতে পারে।");
-      return;
-    }
-
+    if (!currentUser) return alert("লগইন প্রয়োজন!");
     if (!title.trim()) return alert("টাইটেল দিন।");
     if (quizType === 'lesson' && !lessonContent.trim()) return alert("লিসন কন্টেন্ট দিন।");
     if (quizType !== 'lesson' && manualQuestions.length === 0) return alert("অন্তত একটি প্রশ্ন যোগ করুন।");
@@ -181,7 +165,6 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
       quizType === 'written' ? 'written_quizzes' : 'mock_quizzes';
 
     try {
-      // 2. Data Sanitization (No undefined allowed)
       const sanitizedQuestions = manualQuestions.map(q => {
         const cleanQ: any = {
           question: q.question || "",
@@ -201,7 +184,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
         category: selectedCategory || (dynamicCategories[0]?.label || 'General'),
         mediaUrl: commonMediaUrl || "",
         mediaType: commonMediaUrl ? commonMediaType : 'none',
-        startTime: startTime || "", // Default to empty string instead of null/undefined
+        startTime: startTime || "",
         endTime: endTime || "",
         type: quizType,
         updatedAt: serverTimestamp()
@@ -220,10 +203,8 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
         data.isPaid = Number(entryFee) > 0;
       }
 
-      // 3. Database Operation
       if (editingId) {
-        const docRef = doc(db, colName, editingId);
-        await updateDoc(docRef, data);
+        await updateDoc(doc(db, colName, editingId), data);
         alert("সফলভাবে আপডেট হয়েছে!");
       } else {
         data.timestamp = serverTimestamp();
@@ -234,12 +215,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
       resetForm();
       setActiveMode('list');
     } catch (e: any) { 
-      console.error("Publish Error:", e);
-      if (e.code === 'permission-denied') {
-        alert("Permission Denied: আপনার ফায়ারবেস সিকিউরিটি রুলস এই রিকোয়েস্টটি ব্লক করেছে। দয়া করে নিশ্চিত করুন আপনি admin@smartquiz.com ইমেইল দিয়ে লগইন করেছেন।");
-      } else {
-        alert("পাবলিশ ব্যর্থ হয়েছে! এরর: " + (e.message || "Unknown error"));
-      }
+      alert("পাবলিশ ব্যর্থ হয়েছে!");
     } finally { 
       setIsPublishing(false); 
     }
@@ -269,10 +245,22 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
   };
 
   const executeDelete = async () => {
+    if (!deleteConfirm.id) return;
+    
+    // Dynamically identify the correct collection based on current quizType
+    const colName = 
+      quizType === 'paid' ? 'paid_quizzes' : 
+      quizType === 'live' ? 'live_quizzes' : 
+      quizType === 'special' ? 'admin_special_quizzes' : 
+      quizType === 'lesson' ? 'lessons' : 
+      quizType === 'written' ? 'written_quizzes' : 'mock_quizzes';
+
     try {
-      await onDeleteQuiz(deleteConfirm.id, quizType);
+      await deleteDoc(doc(db, colName, deleteConfirm.id));
       setDeleteConfirm({ show: false, id: '', title: '' });
+      alert("সফলভাবে মুছে ফেলা হয়েছে।");
     } catch (e) {
+      console.error(e);
       alert("মুছে ফেলতে সমস্যা হয়েছে।");
     }
   };
@@ -505,15 +493,14 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-4 pb-20">
           {quizzes.map(q => (
-            <div key={q.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-xl transition-all group">
+            <div key={q.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-xl transition-all group relative">
+              <div className="absolute top-6 right-6 flex items-center gap-2">
+                 <div className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-100">FREE</div>
+              </div>
+              
               <div>
                  <div className="flex justify-between items-start mb-4">
                    <span className="text-[9px] font-black bg-slate-100 text-slate-400 px-3 py-1 rounded-full uppercase tracking-widest">{q.type || quizType}</span>
-                   {q.entryFee > 0 ? (
-                     <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100/50">Paid: ৳{q.entryFee}</span>
-                   ) : (
-                     <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100/50">FREE</span>
-                   )}
                  </div>
                  <h5 className="font-black text-slate-800 text-lg leading-tight mb-3 line-clamp-2">{q.title}</h5>
                  <div className="flex flex-col gap-2 mt-4">
@@ -525,12 +512,13 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
                     </div>
                     {q.startTime && (
                       <div className="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 uppercase">
-                         <Calendar size={12}/> Start: {new Date(q.startTime).toLocaleString('bn-BD')}
+                         <Calendar size={12}/> START: {new Date(q.startTime).toLocaleString('bn-BD')}
                       </div>
                     )}
                  </div>
               </div>
-              <div className="flex gap-3 mt-10">
+              
+              <div className="bg-emerald-50/50 p-2 rounded-2xl flex items-center justify-between gap-2 mt-8">
                 <button 
                   onClick={() => { 
                     setEditingId(q.id); 
@@ -549,15 +537,15 @@ const QuizManager: React.FC<QuizManagerProps> = ({ onDeleteQuiz, forcedType }) =
                     setEndTime(q.endTime || '');
                     setActiveMode('create'); 
                   }} 
-                  className="flex-1 p-4.5 bg-emerald-50 text-emerald-700 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2 font-black text-sm"
+                  className="flex-1 p-3.5 bg-white text-emerald-700 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2 font-black text-xs"
                 >
-                  <Edit3 size={18}/> এডিট
+                  <Edit3 size={16}/> এডিট
                 </button>
                 <button 
                   onClick={() => setDeleteConfirm({ show: true, id: q.id, title: q.title })} 
-                  className="p-4.5 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-600 hover:text-white transition-all shadow-sm"
+                  className="p-3.5 bg-white text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm"
                 >
-                  <Trash2 size={20}/>
+                  <Trash2 size={18}/>
                 </button>
               </div>
             </div>
