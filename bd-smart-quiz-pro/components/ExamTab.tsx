@@ -4,7 +4,7 @@ import {
   Sparkles, Star, LayoutGrid, ArrowLeft, Send, AlertCircle, Cpu, BookOpen, 
   PlusCircle, ArrowUpRight, X, CheckCircle2, Clock, Calendar, PenTool, 
   Brain, FileText, Bookmark, FileSignature, Library, Award, Lightbulb, 
-  Gamepad2, Users, Target, Trophy 
+  Gamepad2, Users, Target, Trophy, PlayCircle, RefreshCw
 } from 'lucide-react';
 import { UserProfile, ExamCategory, Lesson } from '../types';
 import { db, auth } from '../services/firebase';
@@ -27,8 +27,8 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
   
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
   const [customTopic, setCustomTopic] = useState('');
+  const [resumeData, setResumeData] = useState<any>(null); // অসমাপ্ত কুইজের ডাটা
   
-  // লেসন ওপেন করার জন্য লোকাল স্টেট
   const [selectedLessonDetail, setSelectedLessonDetail] = useState<Lesson | null>(null);
 
   const [paidQuizzes, setPaidQuizzes] = useState<any[]>([]);
@@ -38,6 +38,18 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
   const [adminWrittenQuizzes, setAdminWrittenQuizzes] = useState<any[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // অসমাপ্ত কুইজ আছে কিনা চেক করা
+  useEffect(() => {
+    const savedQuiz = localStorage.getItem('active_quiz_session');
+    if (savedQuiz) {
+      try {
+        setResumeData(JSON.parse(savedQuiz));
+      } catch (e) {
+        localStorage.removeItem('active_quiz_session');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const unsubs = [
@@ -60,45 +72,56 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
         setLoading(false);
       })
     ];
-
     return () => unsubs.forEach(u => u());
   }, []);
 
+  // কুইজ শুরু করার সময় সেশন সেভ করা
+  const handleStartQuiz = (subject: string, isLive: boolean, isPaid: boolean, fee: number, qId?: string, colName?: string, isWritten?: boolean) => {
+    const sessionData = { subject, isLive, isPaid, entryFee: fee, quizId: qId, collectionName: colName, isWritten, timestamp: Date.now() };
+    localStorage.setItem('active_quiz_session', JSON.stringify(sessionData));
+    setResumeData(sessionData);
+    onSubjectSelect(subject, isLive, isPaid, fee, qId, colName, isWritten);
+  };
+
+  const handleResumeQuiz = () => {
+    if (!resumeData) return;
+    onSubjectSelect(
+      resumeData.subject,
+      resumeData.isLive,
+      resumeData.isPaid,
+      resumeData.entryFee,
+      resumeData.quizId,
+      resumeData.collectionName,
+      resumeData.isWritten
+    );
+  };
+
+  const clearResumeData = () => {
+    localStorage.removeItem('active_quiz_session');
+    setResumeData(null);
+  };
+
   const getLucideIcon = (name: string) => {
-    const icons: Record<string, JSX.Element> = {
-      GraduationCap: <GraduationCap size={24} />,
-      BookOpen: <BookOpen size={24} />,
-      School: <School size={24} />,
-      Briefcase: <Briefcase size={24} />,
-      Moon: <Moon size={24} />,
-      Star: <Star size={24} />,
-      Trophy: <Trophy size={24} />,
-      Library: <Library size={24} />,
-      Award: <Award size={24} />,
-      Lightbulb: <Lightbulb size={24} />,
-      Gamepad2: <Gamepad2 size={24} />,
-      Users: <Users size={24} />,
-      Target: <Target size={24} />
-    };
-    return icons[name] || <LayoutGrid size={24} />;
+    const icons: any = { GraduationCap, BookOpen, School, Briefcase, Moon, Star, Trophy, Library, Award, Lightbulb, Gamepad2, Users, Target };
+    const IconTag = icons[name] || LayoutGrid;
+    return <IconTag size={24} />;
   };
 
   const handleLessonOpen = (lesson: Lesson) => {
     setSelectedLessonDetail(lesson);
-    if(onLessonSelect) onLessonSelect(lesson); // প্যারেন্টকেও জানানো হলো
+    if(onLessonSelect) onLessonSelect(lesson);
   };
 
   const handleStartCustomQuiz = () => {
     if (!customTopic.trim()) return alert("টপিকের নাম লিখুন");
-    onSubjectSelect(customTopic.trim(), false, false, 0, undefined, undefined, examMode === 'written');
+    handleStartQuiz(customTopic.trim(), false, false, 0, undefined, undefined, examMode === 'written');
     setShowCustomPrompt(false);
     setCustomTopic('');
   };
 
   const formatDateTime = (dtStr?: string) => {
     if (!dtStr) return null;
-    const dt = new Date(dtStr);
-    return dt.toLocaleString('bn-BD', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+    return new Date(dtStr).toLocaleString('bn-BD', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
   };
 
   const MODES = [
@@ -117,15 +140,29 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
       <div className="bg-emerald-800 pt-10 pb-20 px-6 rounded-b-[40px] shadow-lg relative overflow-hidden shrink-0">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
         <h2 className="text-2xl font-black text-white mb-6 tracking-tight">পরীক্ষা কেন্দ্র</h2>
+        
+        {/* Resume Quiz Card */}
+        {resumeData && (
+          <div className="mb-6 bg-white/10 backdrop-blur-xl border border-white/20 p-5 rounded-[30px] animate-in zoom-in-95 duration-300">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-amber-400 text-amber-900 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-900/20">
+                <PlayCircle size={24} className="animate-pulse" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black text-amber-300 uppercase tracking-widest">অসমাপ্ত পরীক্ষা</p>
+                <h4 className="text-white font-black text-sm truncate">{resumeData.subject}</h4>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={clearResumeData} className="p-2 bg-white/10 text-white rounded-xl hover:bg-red-500/20 transition-colors"><X size={18} /></button>
+                <button onClick={handleResumeQuiz} className="bg-white text-emerald-800 px-4 py-2 rounded-xl font-black text-xs uppercase shadow-lg active:scale-95 transition-all">চালিয়ে যান</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex bg-black/20 p-1.5 rounded-2xl overflow-x-auto no-scrollbar gap-1 backdrop-blur-md">
           {MODES.map((m) => (
-            <button 
-              key={m.id} 
-              onClick={() => { setExamMode(m.id as any); setSelectedMockCategory(null); }} 
-              className={`flex-1 min-w-[85px] py-2.5 rounded-xl font-black text-[10px] uppercase transition-all duration-300 ${examMode === m.id ? 'bg-white text-emerald-800 shadow-lg scale-105' : 'text-white/50 hover:text-white'}`}
-            >
-              {m.label}
-            </button>
+            <button key={m.id} onClick={() => { setExamMode(m.id as any); setSelectedMockCategory(null); }} className={`flex-1 min-w-[85px] py-2.5 rounded-xl font-black text-[10px] uppercase transition-all duration-300 ${examMode === m.id ? 'bg-white text-emerald-800 shadow-lg scale-105' : 'text-white/50 hover:text-white'}`}>{m.label}</button>
           ))}
         </div>
       </div>
@@ -141,9 +178,7 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
                   <button onClick={() => setShowCustomPrompt(true)} className={`col-span-2 bg-gradient-to-br ${examMode === 'written' ? 'from-emerald-600 to-teal-800' : 'from-indigo-600 to-emerald-700'} p-8 rounded-[40px] shadow-xl text-white text-left relative overflow-hidden group active:scale-95 transition-all`}>
                      <div className="absolute -bottom-4 -right-4 w-32 h-32 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-all duration-700"></div>
                      <div className="flex justify-between items-start mb-4">
-                        <div className="p-4 bg-white/20 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
-                           {examMode === 'written' ? <FileSignature size={32}/> : <Brain size={32}/>}
-                        </div>
+                        <div className="p-4 bg-white/20 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">{examMode === 'written' ? <FileSignature size={32}/> : <Brain size={32}/>}</div>
                         <span className="text-[9px] font-black uppercase tracking-[0.2em] bg-white/20 px-4 py-1.5 rounded-full border border-white/20 backdrop-blur-sm">AI {examMode === 'written' ? 'WRITTEN' : 'MOCK'}</span>
                      </div>
                      <h3 className="text-xl font-black leading-tight">{examMode === 'written' ? 'লিখিত পরীক্ষার টপিক' : 'কাস্টম টপিকে কুইজ'}</h3>
@@ -151,9 +186,7 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
                   </button>
                   {dynamicCategories.map((cat) => (
                     <button key={cat.id} onClick={() => setSelectedMockCategory(cat.label)} className="bg-white p-6 rounded-[40px] shadow-sm border border-slate-100 flex flex-col items-center gap-4 group active:scale-95 transition-all hover:border-emerald-200">
-                       <div className={`w-16 h-16 ${cat.color || 'bg-emerald-500'} text-white rounded-[24px] flex items-center justify-center shadow-lg group-hover:rotate-6 transition-all overflow-hidden`}>
-                         {cat.thumbnailUrl ? <img src={cat.thumbnailUrl} className="w-full h-full object-cover" alt="" /> : getLucideIcon(cat.iconName)}
-                       </div>
+                       <div className={`w-16 h-16 ${cat.color || 'bg-emerald-500'} text-white rounded-[24px] flex items-center justify-center shadow-lg group-hover:rotate-6 transition-all overflow-hidden`}>{cat.thumbnailUrl ? <img src={cat.thumbnailUrl} className="w-full h-full object-cover" alt="" /> : getLucideIcon(cat.iconName)}</div>
                        <span className="font-black text-slate-800 text-[11px] text-center leading-tight">{cat.label}</span>
                     </button>
                   ))}
@@ -163,7 +196,7 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
                    <button onClick={() => setSelectedMockCategory(null)} className="flex items-center gap-2 text-emerald-700 font-black text-[10px] uppercase tracking-widest mb-2 bg-emerald-50 px-5 py-2.5 rounded-full w-max shadow-sm active:scale-90 transition-all"><ArrowLeft size={14}/> ফিরে যান</button>
                    <div className="grid grid-cols-1 gap-3">
                       {(examMode === 'written' ? adminWrittenQuizzes : adminMockQuizzes).filter(q => q.category === selectedMockCategory).map(quiz => (
-                        <button key={quiz.id} onClick={() => onSubjectSelect(quiz.title, false, quiz.isPaid || quiz.entryFee > 0, quiz.entryFee || 0, quiz.id, examMode === 'written' ? 'written_quizzes' : 'mock_quizzes', examMode === 'written')} className="w-full p-6 bg-white rounded-[32px] border border-slate-50 text-left font-black shadow-sm flex justify-between items-center group hover:border-emerald-200 transition-all active:scale-95">
+                        <button key={quiz.id} onClick={() => handleStartQuiz(quiz.title, false, quiz.isPaid || quiz.entryFee > 0, quiz.entryFee || 0, quiz.id, examMode === 'written' ? 'written_quizzes' : 'mock_quizzes', examMode === 'written')} className="w-full p-6 bg-white rounded-[32px] border border-slate-50 text-left font-black shadow-sm flex justify-between items-center group hover:border-emerald-200 transition-all active:scale-95">
                            <div className="min-w-0 flex-grow pr-4">
                               <p className="text-sm text-slate-800 mb-1 leading-tight truncate">{quiz.title}</p>
                               <div className="flex flex-wrap items-center gap-3">
@@ -205,7 +238,7 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
                         </div>
                     </div>
                     <div className="px-8 pb-8">
-                       <button onClick={() => onSubjectSelect(quiz.title, examMode === 'live', true, quiz.entryFee, quiz.id, examMode === 'paid' ? 'paid_quizzes' : examMode === 'live' ? 'live_quizzes' : 'admin_special_quizzes')} className="w-full bg-[#111827] text-white py-4.5 rounded-[20px] font-black text-sm uppercase shadow-xl active:scale-95 transition-all">অংশ নিন</button>
+                       <button onClick={() => handleStartQuiz(quiz.title, examMode === 'live', true, quiz.entryFee, quiz.id, examMode === 'paid' ? 'paid_quizzes' : examMode === 'live' ? 'live_quizzes' : 'admin_special_quizzes')} className="w-full bg-[#111827] text-white py-4.5 rounded-[20px] font-black text-sm uppercase shadow-xl active:scale-95 transition-all">অংশ নিন</button>
                     </div>
                 </div>
              ))}
@@ -220,26 +253,16 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
               ) : (
                 <div className="grid grid-cols-1 gap-4">
                   {lessons.map(lesson => (
-                    <button 
-                      key={lesson.id} 
-                      onClick={() => handleLessonOpen(lesson)}
-                      className="bg-white p-6 rounded-[35px] shadow-sm border border-slate-100 text-left active:scale-[0.98] transition-all"
-                    >
+                    <button key={lesson.id} onClick={() => handleLessonOpen(lesson)} className="bg-white p-6 rounded-[35px] shadow-sm border border-slate-100 text-left active:scale-[0.98] transition-all">
                         <div className="flex justify-between items-start mb-3">
-                          <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-inner">
-                              <BookOpen size={20} />
-                          </div>
+                          <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-inner"><BookOpen size={20} /></div>
                           <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full uppercase tracking-widest">{lesson.category}</span>
                         </div>
                         <h3 className="text-md font-black text-slate-900 leading-tight mb-2 line-clamp-1">{lesson.title}</h3>
                         <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed opacity-70 mb-4">{lesson.content}</p>
                         <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                          <div className="flex items-center gap-2 text-[9px] font-black text-slate-300 uppercase">
-                              <Clock size={12}/> {lesson.timestamp ? new Date(lesson.timestamp.seconds * 1000).toLocaleDateString('bn-BD') : 'আজ'}
-                          </div>
-                          <div className="text-blue-600 font-black text-[10px] uppercase flex items-center gap-1">
-                              পড়ুন <ArrowUpRight size={14}/>
-                          </div>
+                          <div className="flex items-center gap-2 text-[9px] font-black text-slate-300 uppercase"><Clock size={12}/> {lesson.timestamp ? new Date(lesson.timestamp.seconds * 1000).toLocaleDateString('bn-BD') : 'আজ'}</div>
+                          <div className="text-blue-600 font-black text-[10px] uppercase flex items-center gap-1">পড়ুন <ArrowUpRight size={14}/></div>
                         </div>
                     </button>
                   ))}
@@ -249,7 +272,6 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
         )}
 
         {examMode === 'fun' && <div className="min-h-full"><PuzzlesTab /></div>}
-
         <AdRenderer placementId="exam_bottom" className="mt-10" />
       </div>
 
@@ -262,31 +284,23 @@ const ExamTab: React.FC<ExamTabProps> = ({ user, onSubjectSelect, onLessonSelect
           </div>
           <div className="p-8">
              <h1 className="text-2xl font-black text-slate-900 mb-6 leading-tight">{selectedLessonDetail.title}</h1>
-             <div className="prose prose-slate max-w-none text-slate-700 font-medium leading-loose text-lg whitespace-pre-wrap">
-                {selectedLessonDetail.content}
-             </div>
+             <div className="prose prose-slate max-w-none text-slate-700 font-medium leading-loose text-lg whitespace-pre-wrap">{selectedLessonDetail.content}</div>
           </div>
           <div className="p-8 mt-10 border-t border-slate-100 bg-slate-50">
-             <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest">শেখা শেষ হলে বন্ধ করুন</p>
-             <button onClick={() => setSelectedLessonDetail(null)} className="w-full bg-blue-600 text-white py-5 rounded-[25px] mt-4 font-black shadow-xl">আমি পড়েছি</button>
+             <button onClick={() => setSelectedLessonDetail(null)} className="w-full bg-blue-600 text-white py-5 rounded-[25px] font-black shadow-xl">আমি পড়েছি</button>
           </div>
         </div>
       )}
 
-      {/* AI Custom Quiz Prompt */}
+      {/* AI Prompt */}
       {showCustomPrompt && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[2000] flex items-center justify-center p-6">
-           <div className="bg-white w-full max-w-sm rounded-[50px] p-10 shadow-2xl relative border border-white/20">
+           <div className="bg-white w-full max-w-sm rounded-[50px] p-10 shadow-2xl relative">
               <button onClick={() => setShowCustomPrompt(false)} className="absolute top-10 right-10 text-slate-300 hover:text-slate-900 p-1"><X size={24}/></button>
-              <div className={`w-20 h-20 ${examMode === 'written' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'} rounded-[30px] flex items-center justify-center mx-auto mb-8`}>
-                 {examMode === 'written' ? <FileSignature size={40} /> : <Brain size={40} />}
-              </div>
               <h3 className="text-2xl font-black text-slate-900 text-center mb-3">{examMode === 'written' ? 'AI রিটেন মাস্টার' : 'AI কুইজ ম্যাজিক'}</h3>
               <div className="space-y-6 mt-8">
-                 <input type="text" value={customTopic} onChange={(e) => setCustomTopic(e.target.value)} placeholder="টপিক লিখুন (যেমন: ইতিহাস)" className="w-full bg-slate-50 border-2 border-slate-50 p-5 rounded-[28px] font-black outline-none focus:bg-white focus:border-emerald-200 transition-all text-slate-800" autoFocus />
-                 <button onClick={handleStartCustomQuiz} className={`w-full ${examMode === 'written' ? 'bg-emerald-600' : 'bg-indigo-600'} text-white py-5 rounded-[28px] font-black text-lg shadow-xl active:scale-95 transition-all`}>
-                    শুরু করুন
-                 </button>
+                 <input type="text" value={customTopic} onChange={(e) => setCustomTopic(e.target.value)} placeholder="টপিক লিখুন" className="w-full bg-slate-50 border-2 border-slate-50 p-5 rounded-[28px] font-black outline-none focus:bg-white focus:border-emerald-200 transition-all text-slate-800" autoFocus />
+                 <button onClick={handleStartCustomQuiz} className={`w-full ${examMode === 'written' ? 'bg-emerald-600' : 'bg-indigo-600'} text-white py-5 rounded-[28px] font-black text-lg shadow-xl active:scale-95 transition-all`}>শুরু করুন</button>
               </div>
            </div>
         </div>
