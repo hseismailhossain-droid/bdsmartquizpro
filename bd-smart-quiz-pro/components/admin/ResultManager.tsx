@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Trophy, Users, Search, ChevronRight, CheckCircle2, Star, Medal, ArrowLeft, Send, Sparkles, Loader2, Clock, Trash2, FileSignature, User, ExternalLink, MessageSquare, Save, X, Edit3, HelpCircle, AlertCircle, LayoutGrid, Zap, Timer } from 'lucide-react';
+import { Trophy, Users, Search, ChevronRight, CheckCircle2, Star, Medal, ArrowLeft, Send, Sparkles, Loader2, Clock, Trash2, FileSignature, User, ExternalLink, MessageSquare, Save, X, Edit3, HelpCircle, AlertCircle, LayoutGrid, Zap, Timer, Calendar, Phone } from 'lucide-react';
 import { db } from '../../services/firebase';
 import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, limit } from 'firebase/firestore';
 import ConfirmModal from './ConfirmModal';
@@ -19,6 +18,8 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
   
   const [gradingSubmission, setGradingSubmission] = useState<WrittenSubmission | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   
   // MCQ Specific filtering
   const [mcqType, setMcqType] = useState<'paid' | 'live' | 'special' |'weekly'| 'mock'>('paid');
@@ -27,16 +28,19 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
     show: false, id: '', title: '', col: ''
   });
 
-  useEffect(() => {
-    let colName = '';
-    if (activeSubTab === 'mcq') {
-      colName = mcqType === 'paid' ? 'paid_quizzes' : 
-                mcqType === 'live' ? 'live_quizzes' :
-                mcqType === 'weekly' ? 'weekly_quizzes' :
-                mcqType === 'special' ? 'admin_special_quizzes' : 'mock_quizzes';
-    } else {
-      colName = 'written_quizzes';
+  // Helper function to get correct collection name
+  const getQuizCol = (type: string) => {
+    switch (type) {
+      case 'paid': return 'paid_quizzes';
+      case 'live': return 'live_quizzes';
+      case 'weekly': return 'admin_weekly_quizzes';
+      case 'special': return 'admin_special_quizzes';
+      default: return 'mock_quizzes';
     }
+  };
+
+  useEffect(() => {
+    let colName = activeSubTab === 'mcq' ? getQuizCol(mcqType) : 'written_quizzes';
 
     const unsubQuizzes = onSnapshot(query(collection(db, colName), orderBy('timestamp', 'desc')), (snapshot) => {
       setQuizzes(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -59,7 +63,6 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
   useEffect(() => {
     if (!selectedQuiz) return;
     
-    // Using a simpler query to avoid index requirement for simple where
     const q = query(
       collection(db, 'quiz_attempts'), 
       where('quizId', '==', selectedQuiz.id)
@@ -68,21 +71,12 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       
-      // Sort in memory for better flexibility
       list.sort((a: any, b: any) => {
-        // First sort by score (descending)
-        if (b.score !== a.score) {
-          return b.score - a.score;
-        }
-        // If score is same, sort by timeTaken (ascending - faster is better)
+        if (b.score !== a.score) return b.score - a.score;
         const timeA = a.timeTaken || 999999;
         const timeB = b.timeTaken || 999999;
         if (timeA !== timeB) return timeA - timeB;
-
-        // If time also same, sort by timestamp
-        const dateA = a.timestamp?.seconds || 0;
-        const dateB = b.timestamp?.seconds || 0;
-        return dateA - dateB;
+        return (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0);
       });
 
       setParticipants(list);
@@ -96,19 +90,17 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
     setIsPublishing(true);
     
     try {
-      const colName = mcqType === 'paid' ? 'paid_quizzes' : 
-                      mcqType === 'live' ? 'live_quizzes' :
-                      mcqType === 'weekly' ? 'weekly_quizzes' :
-                      mcqType === 'special' ? 'admin_special_quizzes' : 'mock_quizzes';
-
+      const colName = getQuizCol(mcqType);
       await updateDoc(doc(db, colName, selectedQuiz.id), { status: 'ended' });
       
       const winner = participants[0];
       await addDoc(collection(db, 'winners'), {
         uid: winner.uid,
         userName: winner.userName,
+        userPhone: winner.phoneNumber || 'N/A', // নম্বর ফিল্ড যুক্ত করা হলো
         quizTitle: selectedQuiz.title,
         quizId: selectedQuiz.id,
+        quizType: mcqType,
         score: winner.score,
         total: winner.total,
         prize: selectedQuiz.prizePool || 0,
@@ -119,7 +111,7 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
 
       await addDoc(collection(db, 'notifications'), {
         title: `ফলাফল প্রকাশিত: ${selectedQuiz.title}`,
-        message: `${winner.userName} ১ম স্থান অধিকার করেছেন! বিজয়ীদের তালিকা লিডারবোর্ডে দেখুন।`,
+        message: `${winner.userName} ১ম স্থান অধিকার করেছেন! পুরস্কারের জন্য ইউজারের সাথে যোগাযোগ করা হবে।`,
         time: 'এইমাত্র',
         timestamp: serverTimestamp(),
         isRead: false
@@ -137,9 +129,6 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
       setIsPublishing(false);
     }
   };
-
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
 
   const formatTimeTaken = (seconds: number) => {
     if (!seconds) return "--:--";
@@ -310,7 +299,7 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
           <div className="bg-white rounded-[44px] shadow-sm border border-slate-100 overflow-hidden">
             <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50/30 gap-4">
                <div>
-                  <h4 className="font-black text-slate-900">অংশগ্রহণকারী ({participants.length})</h4>
+                  <h4 className="font-black text-slate-900 flex items-center gap-2">অংশগ্রহণকারী ({participants.length}) {selectedQuiz.collectNumber && <Phone size={14} className="text-emerald-500"/>}</h4>
                   <p className="text-xs text-slate-400 font-bold">অটো-সর্ট করা হয়েছে (স্কোর ও সময়)</p>
                </div>
                <button 
@@ -326,7 +315,7 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
               <table className="w-full text-left min-w-[600px]">
                 <thead>
                   <tr className="bg-white border-b border-slate-100">
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ইউজার</th>
+                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ইউজার ও ফোন</th>
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">স্কোর</th>
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">সময়</th>
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">র‍্যাংক</th>
@@ -342,7 +331,7 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
                             </div>
                             <div>
                                <p className="font-black text-slate-900 text-sm">{p.userName}</p>
-                               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">UID: {p.uid.substring(0,8)}</p>
+                               <p className="text-[10px] text-emerald-600 font-black">{p.phoneNumber || 'N/A'}</p>
                             </div>
                          </div>
                       </td>
@@ -429,7 +418,7 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
                    <button 
                     onClick={() => setDeleteConfirm({ 
                       show: true, id: quiz.id, title: quiz.title, 
-                      col: mcqType === 'paid' ? 'paid_quizzes' : mcqType === 'live' ? 'live_quizzes' : mcqType === 'special' ? 'admin_special_quizzes' : 'mock_quizzes' 
+                      col: getQuizCol(mcqType) 
                     })}
                     className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
                    >
@@ -438,7 +427,10 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
                 </div>
               </div>
               <h3 className="text-xl font-black text-slate-900 mb-2 leading-tight">{quiz.title}</h3>
-              <p className="text-xs text-slate-400 font-bold">{quiz.subject}</p>
+              <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
+                <span>{quiz.subject}</span>
+                {quiz.collectNumber && <Phone size={12} className="text-emerald-500"/>}
+              </div>
             </div>
 
             <button 
