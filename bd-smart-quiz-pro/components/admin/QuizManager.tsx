@@ -9,12 +9,12 @@ import ConfirmModal from './ConfirmModal';
 
 interface QuizManagerProps {
   onDeleteQuiz?: any;
-  forcedType?: 'mock' | 'paid' | 'live' | 'lesson' | 'special' | 'written';
+  forcedType?: 'mock' | 'paid' | 'live' | 'lesson' | 'special' | 'written' | 'weekly';
 }
 
 const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
   const [activeMode, setActiveMode] = useState<'create' | 'list'>('list');
-  const [quizType, setQuizType] = useState<'mock' | 'paid' | 'live' | 'lesson' | 'special' | 'written'>(forcedType || 'mock');
+  const [quizType, setQuizType] = useState<'mock' | 'paid' | 'live' | 'lesson' | 'special' | 'written' | 'weekly'>(forcedType || 'mock');
   const [isPublishing, setIsPublishing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showBulkInput, setShowBulkInput] = useState(false);
@@ -52,6 +52,19 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
     show: false, id: '', title: ''
   });
 
+  // Helper to get collection name based on quiz type
+  const getColName = (type: string) => {
+    switch (type) {
+      case 'paid': return 'paid_quizzes';
+      case 'live': return 'live_quizzes';
+      case 'special': return 'admin_special_quizzes';
+      case 'lesson': return 'lessons';
+      case 'written': return 'written_quizzes';
+      case 'weekly': return 'admin_weekly_quizzes';
+      default: return 'mock_quizzes';
+    }
+  };
+
   useEffect(() => {
     if (forcedType) setQuizType(forcedType);
   }, [forcedType]);
@@ -61,12 +74,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
       setDynamicCategories(s.docs.map(d => ({ id: d.id, ...d.data() } as ExamCategory)));
     });
 
-    const colName = 
-      quizType === 'paid' ? 'paid_quizzes' : 
-      quizType === 'live' ? 'live_quizzes' : 
-      quizType === 'special' ? 'admin_special_quizzes' : 
-      quizType === 'lesson' ? 'lessons' : 
-      quizType === 'written' ? 'written_quizzes' : 'mock_quizzes';
+    const colName = getColName(quizType);
 
     const unsubList = onSnapshot(query(collection(db, colName), orderBy('timestamp', 'desc'), limit(50)), (s) => {
       setQuizzes(s.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -122,7 +130,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
           options: [parts[1], parts[2], parts[3], parts[4]],
           correctAnswer: parseInt(parts[5]) || 0,
           explanation: parts[6] || "",
-          marks: quizType === 'written' ? Number(parts[7] || 5) : undefined
+          marks: (quizType === 'written' || quizType === 'weekly') ? Number(parts[7] || 5) : undefined
         });
       }
     });
@@ -133,17 +141,17 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
 
   const addQuestionToList = () => {
     if (!currentQ.trim()) return alert("প্রশ্নটি লিখুন!");
-    const isWritten = quizType === 'written';
-    if (!isWritten && (opts.some(o => !o.trim()) || correctIdx === null)) return alert("সবগুলো অপশন ও সঠিক উত্তর সিলেক্ট করুন!");
+    const needsOptions = quizType !== 'written';
+    if (needsOptions && (opts.some(o => !o.trim()) || correctIdx === null)) return alert("সবগুলো অপশন ও সঠিক উত্তর সিলেক্ট করুন!");
 
     const newQ: Question = { 
       question: currentQ.trim(), 
-      options: isWritten ? [] : [...opts], 
-      correctAnswer: isWritten ? 0 : (correctIdx || 0),
+      options: quizType === 'written' ? [] : [...opts], 
+      correctAnswer: quizType === 'written' ? 0 : (correctIdx || 0),
       explanation: explanation.trim() || "",
       mediaUrl: mediaUrl.trim() || "",
       mediaType: mediaUrl.trim() ? (mediaType === 'none' ? 'image' : mediaType) : 'none',
-      marks: isWritten ? Number(qMarks) : undefined
+      marks: (quizType === 'written' || quizType === 'weekly') ? Number(qMarks) : undefined
     };
     setManualQuestions([...manualQuestions, newQ]);
     setCurrentQ(''); setOpts(['', '', '', '']); setCorrectIdx(null); setMediaUrl(''); setMediaType('none'); setExplanation(''); setQMarks('5');
@@ -157,12 +165,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
     if (quizType !== 'lesson' && manualQuestions.length === 0) return alert("অন্তত একটি প্রশ্ন যোগ করুন।");
 
     setIsPublishing(true);
-    const colName = 
-      quizType === 'paid' ? 'paid_quizzes' : 
-      quizType === 'live' ? 'live_quizzes' : 
-      quizType === 'special' ? 'admin_special_quizzes' : 
-      quizType === 'lesson' ? 'lessons' : 
-      quizType === 'written' ? 'written_quizzes' : 'mock_quizzes';
+    const colName = getColName(quizType);
 
     try {
       const sanitizedQuestions = manualQuestions.map(q => {
@@ -246,14 +249,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
 
   const executeDelete = async () => {
     if (!deleteConfirm.id) return;
-    
-    // Dynamically identify the correct collection based on current quizType
-    const colName = 
-      quizType === 'paid' ? 'paid_quizzes' : 
-      quizType === 'live' ? 'live_quizzes' : 
-      quizType === 'special' ? 'admin_special_quizzes' : 
-      quizType === 'lesson' ? 'lessons' : 
-      quizType === 'written' ? 'written_quizzes' : 'mock_quizzes';
+    const colName = getColName(quizType);
 
     try {
       await deleteDoc(doc(db, colName, deleteConfirm.id));
@@ -283,6 +279,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
               { id: 'mock', label: 'মক কুইজ', icon: <PenTool size={16}/> },
               { id: 'paid', label: 'পেইড কুইজ', icon: <Zap size={16}/> },
               { id: 'live', label: 'লাইভ এক্সাম', icon: <Clock size={16}/> },
+              { id: 'weekly', label: 'সাপ্তাহিক', icon: <Calendar size={16}/> },
               { id: 'lesson', label: 'লিসন', icon: <FileText size={16}/> },
               { id: 'special', label: 'স্পেশাল', icon: <Star size={16}/> },
               { id: 'written', label: 'লিখিত', icon: <FileSignature size={16}/> },
@@ -300,8 +297,8 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
 
       <div className="flex justify-between items-center px-4">
         <h2 className="text-3xl font-black text-slate-900 flex items-center gap-3">
-          {quizType === 'written' ? <FileSignature size={28}/> : editingId ? <Pencil size={28}/> : <Plus size={28}/>} 
-          {quizType === 'written' ? 'লিখিত পরীক্ষা' : quizType === 'lesson' ? 'লিসন তৈরি' : 'কুইজ তৈরি'}
+          {quizType === 'weekly' ? <Calendar size={28}/> : quizType === 'written' ? <FileSignature size={28}/> : editingId ? <Pencil size={28}/> : <Plus size={28}/>} 
+          {quizType === 'weekly' ? 'সাপ্তাহিক কুইজ' : quizType === 'written' ? 'লিখিত পরীক্ষা' : quizType === 'lesson' ? 'লিসন তৈরি' : 'কুইজ তৈরি'}
         </h2>
         <div className="flex bg-slate-200/50 p-1.5 rounded-[22px] backdrop-blur-sm border border-slate-100 shadow-inner">
           <button 
@@ -420,7 +417,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
                            <label className="text-[10px] font-black text-slate-400 uppercase px-2">প্রশ্নপত্র</label>
                            <textarea value={currentQ} onChange={e => setCurrentQ(e.target.value)} placeholder="প্রশ্নটি লিখুন..." className="w-full bg-white p-6 rounded-3xl font-bold outline-none h-24 border border-transparent focus:border-emerald-200 shadow-sm" />
                         </div>
-                        {quizType === 'written' && (
+                        {(quizType === 'written' || quizType === 'weekly') && (
                           <div className="space-y-2">
                              <label className="text-[10px] font-black text-emerald-600 uppercase px-2">মার্কস (Marks)</label>
                              <input type="number" value={qMarks} onChange={e => setQMarks(e.target.value)} className="w-full bg-white p-6 rounded-3xl font-black text-2xl text-center border-2 border-emerald-50 outline-none" />
@@ -486,7 +483,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
 
             <button onClick={handlePublish} disabled={isPublishing || commonUploadProgress !== null} className="w-full py-6 bg-slate-900 text-white rounded-[32px] font-black text-xl shadow-2xl active:scale-95 disabled:opacity-50 flex items-center justify-center gap-4">
               {isPublishing ? <Loader2 className="animate-spin" /> : <Sparkles size={24}/>} 
-              {isPublishing ? 'পাবলিশ হচ্ছে...' : 'সফলভাবে পাবলিশ করুন'}
+              {isPublishing ? 'পাবলিশ হচ্ছে...' : editingId ? 'আপডেট করুন' : 'সফলভাবে পাবলিশ করুন'}
             </button>
           </div>
         </div>
@@ -495,7 +492,9 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
           {quizzes.map(q => (
             <div key={q.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-xl transition-all group relative">
               <div className="absolute top-6 right-6 flex items-center gap-2">
-                 <div className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-100">FREE</div>
+                 <div className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-100">
+                   {q.entryFee > 0 ? `৳${q.entryFee}` : 'FREE'}
+                 </div>
               </div>
               
               <div>
@@ -555,7 +554,7 @@ const QuizManager: React.FC<QuizManagerProps> = ({ forcedType }) => {
                 <div className="w-20 h-20 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mx-auto mb-6">
                    <LayoutGrid size={40}/>
                 </div>
-                <p className="text-slate-300 font-black uppercase tracking-[0.2em] text-xs">কোনো কুইজ পাওয়া যায়নি</p>
+                <p className="text-slate-300 font-black uppercase tracking-[0.2em] text-xs">কোনো কন্টেন্ট পাওয়া যায়নি</p>
              </div>
           )}
         </div>
