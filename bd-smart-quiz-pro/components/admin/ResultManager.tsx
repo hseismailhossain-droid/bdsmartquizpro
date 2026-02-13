@@ -21,7 +21,7 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
   const [isUpdating, setIsUpdating] = useState(false);
   
   // MCQ Specific filtering
-  const [mcqType, setMcqType] = useState<'paid' | 'live' | 'special' | 'mock'>('paid');
+  const [mcqType, setMcqType] = useState<'paid' | 'live' | 'special' |'weekly'| 'mock'>('paid');
 
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean, id: string, title: string, col: string}>({
     show: false, id: '', title: '', col: ''
@@ -31,7 +31,8 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
     let colName = '';
     if (activeSubTab === 'mcq') {
       colName = mcqType === 'paid' ? 'paid_quizzes' : 
-                mcqType === 'live' ? 'live_quizzes' : 
+                mcqType === 'live' ? 'live_quizzes' :
+                mcqType === 'weekly' ? 'weekly_quizzes' :
                 mcqType === 'special' ? 'admin_special_quizzes' : 'mock_quizzes';
     } else {
       colName = 'written_quizzes';
@@ -96,7 +97,8 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
     
     try {
       const colName = mcqType === 'paid' ? 'paid_quizzes' : 
-                      mcqType === 'live' ? 'live_quizzes' : 
+                      mcqType === 'live' ? 'live_quizzes' :
+                      mcqType === 'weekly' ? 'weekly_quizzes' :
                       mcqType === 'special' ? 'admin_special_quizzes' : 'mock_quizzes';
 
       await updateDoc(doc(db, colName, selectedQuiz.id), { status: 'ended' });
@@ -400,6 +402,7 @@ const ResultManager: React.FC<ResultManagerProps> = ({ activeSubTab = 'mcq' }) =
              { id: 'paid', label: 'Paid', icon: <Zap size={14}/> },
              { id: 'live', label: 'Live', icon: <Clock size={14}/> },
              { id: 'special', label: 'Special', icon: <Star size={14}/> },
+             { id: 'weekly', label: 'weekly', icon: <Calendar size={14}/> },
              { id: 'mock', label: 'Mock', icon: <LayoutGrid size={14}/> }
            ].map(t => (
              <button 
