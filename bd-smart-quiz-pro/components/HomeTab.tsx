@@ -1,242 +1,228 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-import { UserProfile, QuizResult, Question, Notification, Lesson } from '../types';
-import { Bell, Edit3, Wallet, CreditCard, Megaphone, BarChart3, Star, ChevronRight, Zap, CheckCircle2, Music, Pause, Play, X, Headphones } from 'lucide-react';
-import AdRenderer from './AdRenderer';
+import React, { useState, useEffect } from 'react';
+import { UserProfile, Notification } from '../types';
+import { 
+  Bell, Edit3, Wallet, CreditCard, Megaphone, Star, 
+  ChevronRight, Zap, X, Send, Loader2, ShieldLock, 
+  MessageSquareWarning, User as UserIcon 
+} from 'lucide-react';
 import { db, auth } from '../services/firebase';
-import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
+import { 
+  collection, query, orderBy, limit, onSnapshot, 
+  addDoc, serverTimestamp 
+} from 'firebase/firestore';
 
 interface HomeTabProps {
   user: UserProfile;
-  history: { exams: QuizResult[], mistakes: Question[], marked: Question[] };
   notifications: Notification[];
-  lessons: Lesson[];
   onShowNotifications: () => void;
-  onLogout: () => void;
+  onEditProfile: (tab?: 'profile' | 'wallet' | 'report' | 'privacy') => void;
   onSubjectSelect: (subject: string, isLive?: boolean, isPaid?: boolean, entryFee?: number, quizId?: string, collectionName?: string) => void;
-  onLessonSelect: (lesson: Lesson) => void;
-  onEditProfile: (tab?: 'profile' | 'report' | 'privacy' | 'wallet') => void;
-  onSubmitDeposit: (amount: number, method: 'bkash' | 'nagad', trxId: string) => void;
-  onSubmitWithdraw: (amount: number, method: 'bkash' | 'nagad', accountNumber: string) => void;
 }
 
-const DEFAULT_RECITATIONS = [
-  { id: 'def-1', title: 'সূরা আর-রহমান', artist: 'মিশারি রাশিদ আল-আফাসি', url: 'https://server8.mp3quran.net/afs/055.mp3' },
-  { id: 'def-2', title: 'সূরা আল-মূলক', artist: 'মিশারি রাশিদ আল-আফাসি', url: 'https://server8.mp3quran.net/afs/067.mp3' },
-  { id: 'def-3', title: 'সূরা ইয়াসিন', artist: 'মিশারি রাশিদ আল-আফাসি', url: 'https://server8.mp3quran.net/afs/036.mp3' },
-  { id: 'def-4', title: 'সূরা আল-কাহফ', artist: 'মিশারি রাশিদ আল-আফাসি', url: 'https://server8.mp3quran.net/afs/018.mp3' },
-  { id: 'def-5', title: 'সূরা আল-ওয়াকিয়াহ', artist: 'মিশারি রাশিদ আল-আফাসি', url: 'https://server8.mp3quran.net/afs/056.mp3' }
-];
-
 const HomeTab: React.FC<HomeTabProps> = ({ 
-  user, history, notifications, lessons, onShowNotifications, onLogout, 
-  onSubjectSelect, onLessonSelect, onEditProfile, onSubmitDeposit, onSubmitWithdraw 
+  user, notifications, onShowNotifications, onEditProfile, onSubjectSelect 
 }) => {
   const [notices, setNotices] = useState<any[]>([]);
-  const [polls, setPolls] = useState<any[]>([]);
   const [specialQuizzes, setSpecialQuizzes] = useState<any[]>([]);
-  const [dbRecitations, setDbRecitations] = useState<any[]>([]);
   
-  const [currentAudio, setCurrentAudio] = useState<any | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Modal & Tabs State
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'profile' | 'wallet' | 'report' | 'privacy'>('profile');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Form States
+  const [reportData, setReportData] = useState({ type: 'Problem', message: '' });
+  const [depositData, setDepositData] = useState({ amount: '', method: 'bkash', trxId: '' });
 
   useEffect(() => {
     const unsubNotices = onSnapshot(query(collection(db, 'admin_notices'), orderBy('timestamp', 'desc'), limit(3)), (snap) => {
       setNotices(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-    const unsubPolls = onSnapshot(query(collection(db, 'admin_polls'), orderBy('timestamp', 'desc'), limit(1)), (snap) => {
-      setPolls(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
     const unsubSpecial = onSnapshot(query(collection(db, 'admin_special_quizzes'), orderBy('timestamp', 'desc'), limit(5)), (snap) => {
       setSpecialQuizzes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-    const unsubAudios = onSnapshot(query(collection(db, 'admin_mind_relax_audio'), orderBy('timestamp', 'desc')), (snap) => {
-      setDbRecitations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => { unsubNotices(); unsubPolls(); unsubSpecial(); unsubAudios(); };
+    return () => { unsubNotices(); unsubSpecial(); };
   }, []);
 
-  const allRecitations = dbRecitations.length > 0 ? [...dbRecitations, ...DEFAULT_RECITATIONS] : DEFAULT_RECITATIONS;
-
-  const handleVote = async (pollId: string, optionIndex: number) => {
-    if (!auth.currentUser) return;
-    const uid = auth.currentUser.uid;
-    const poll = polls.find(p => p.id === pollId);
-    if (poll.votedBy?.includes(uid)) return alert("আপনি ইতিমধ্যে ভোট দিয়েছেন।");
-    const updatedOptions = [...poll.options];
-    updatedOptions[optionIndex].votes += 1;
-    await updateDoc(doc(db, 'admin_polls', pollId), {
-      options: updatedOptions,
-      votedBy: arrayUnion(uid)
-    });
+  // --- রিপোর্ট পাঠানোর ফাংশন (Admin App-এর জন্য) ---
+  const submitReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportData.message) return alert("মেসেজ লিখুন");
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, 'user_reports'), {
+        uid: auth.currentUser?.uid,
+        userName: user.name,
+        type: reportData.type,
+        message: reportData.message,
+        status: 'pending',
+        timestamp: serverTimestamp()
+      });
+      alert("রিপোর্ট অ্যাডমিনের কাছে পাঠানো হয়েছে!");
+      setReportData({ type: 'Problem', message: '' });
+    } catch (error) { alert("ব্যর্থ হয়েছে!"); }
+    finally { setIsSubmitting(false); }
   };
 
-  const playRecitation = async (recitation: any) => {
-    if (!audioRef.current) return;
-    const safePlay = async () => {
-        try {
-            await audioRef.current?.play();
-            setIsPlaying(true);
-        } catch (error: any) {
-            if (error.name !== 'AbortError') console.error("Audio playback error:", error);
-        }
-    };
-    if (currentAudio?.id === recitation.id) {
-      if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); } 
-      else { await safePlay(); }
-    } else {
-      audioRef.current.pause();
-      setCurrentAudio(recitation);
-      audioRef.current.src = recitation.url;
-      audioRef.current.load();
-      await safePlay();
-    }
+  const submitDeposit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!depositData.amount || !depositData.trxId) return alert("সব তথ্য দিন");
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, 'deposit_requests'), {
+        uid: auth.currentUser?.uid,
+        userName: user.name,
+        amount: Number(depositData.amount),
+        method: depositData.method,
+        trxId: depositData.trxId,
+        status: 'pending',
+        timestamp: serverTimestamp()
+      });
+      alert("ডিপোজিট রিকোয়েস্ট পাঠানো হয়েছে!");
+      setDepositData({ amount: '', method: 'bkash', trxId: '' });
+    } catch (error) { alert("ব্যর্থ হয়েছে!"); }
+    finally { setIsSubmitting(false); }
   };
-
-  const playRandom = () => {
-    const randomIndex = Math.floor(Math.random() * allRecitations.length);
-    playRecitation(allRecitations[randomIndex]);
-  };
-
-  const displayName = user?.name ? user.name.split(' ')[0] : 'ইউজার';
 
   return (
-    <div className="p-5 animate-in fade-in duration-500 font-['Hind_Siliguri'] pb-32 no-scrollbar relative">
-      <audio ref={audioRef} onEnded={() => setIsPlaying(false)} preload="auto" />
+    <div className="p-5 font-['Hind_Siliguri'] pb-32">
+      
+      {/* --- Settings Modal with 4 Tabs --- */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[2000] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[40px] overflow-hidden shadow-2xl animate-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+              <h3 className="font-black text-slate-900 flex items-center gap-2 uppercase tracking-tighter"><Edit3 size={18}/> সেটিংস ও প্রোফাইল</h3>
+              <button onClick={() => setShowSettingsModal(false)} className="p-2 hover:bg-white rounded-full transition-all"><X size={20}/></button>
+            </div>
 
-      {currentAudio && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-slate-900/95 backdrop-blur-2xl p-4 rounded-[32px] border border-white/10 shadow-2xl z-[1000] flex items-center justify-between animate-in slide-in-from-bottom-10 duration-500">
-           <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-11 h-11 rounded-2xl bg-emerald-500 flex items-center justify-center text-white shadow-lg ${isPlaying ? 'animate-pulse' : ''}`}><Music size={22} /></div>
-              <div className="min-w-0"><h4 className="text-white text-[13px] font-black truncate leading-tight">{currentAudio.title}</h4><p className="text-emerald-400 text-[10px] font-bold uppercase tracking-widest truncate">{currentAudio.artist}</p></div>
-           </div>
-           <div className="flex items-center gap-2">
-              <button onClick={() => playRecitation(currentAudio)} className="w-11 h-11 bg-white rounded-full flex items-center justify-center text-slate-900 active:scale-90 transition-all shadow-md">{isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />}</button>
-              <button onClick={() => { audioRef.current?.pause(); setCurrentAudio(null); setIsPlaying(false); }} className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-all"><X size={18} /></button>
-           </div>
+            {/* Tab Navigation */}
+            <div className="flex p-2 gap-1 bg-slate-100/50 mx-6 mt-4 rounded-2xl">
+              {[
+                { id: 'profile', label: 'প্রোফাইল', icon: UserIcon },
+                { id: 'wallet', label: 'ওয়ালেট', icon: Wallet },
+                { id: 'report', label: 'রিপোর্ট', icon: MessageSquareWarning },
+                { id: 'privacy', label: 'প্রাইভেসি', icon: ShieldLock },
+              ].map((tab) => (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 flex flex-col items-center py-3 rounded-xl transition-all ${activeTab === tab.id ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-400'}`}>
+                  <tab.icon size={18} />
+                  <span className="text-[10px] font-black mt-1 uppercase">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar">
+              {/* 1. Profile Tab */}
+              {activeTab === 'profile' && (
+                <div className="space-y-4 text-center">
+                  <div className="w-20 h-20 bg-emerald-100 rounded-3xl mx-auto flex items-center justify-center text-emerald-700"><UserIcon size={40}/></div>
+                  <div><h4 className="font-black text-xl">{user.name}</h4><p className="text-slate-400 text-sm">{user.email}</p></div>
+                  <div className="grid grid-cols-2 gap-4 pt-4">
+                    <div className="bg-slate-50 p-4 rounded-2xl text-center"><p className="text-[10px] font-black text-slate-400 uppercase">ব্যালেন্স</p><p className="font-black text-emerald-700">৳{user.balance}</p></div>
+                    <div className="bg-slate-50 p-4 rounded-2xl text-center"><p className="text-[10px] font-black text-slate-400 uppercase">ক্যাটাগরি</p><p className="font-black text-slate-700">{user.category}</p></div>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Wallet Tab */}
+              {activeTab === 'wallet' && (
+                <form onSubmit={submitDeposit} className="space-y-4">
+                  <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                    <button type="button" onClick={() => setDepositData({...depositData, method: 'bkash'})} className={`flex-1 py-2 rounded-lg font-black text-xs ${depositData.method === 'bkash' ? 'bg-white text-pink-600' : 'text-slate-400'}`}>বিকাশ</button>
+                    <button type="button" onClick={() => setDepositData({...depositData, method: 'nagad'})} className={`flex-1 py-2 rounded-lg font-black text-xs ${depositData.method === 'nagad' ? 'bg-white text-orange-600' : 'text-slate-400'}`}>নগদ</button>
+                  </div>
+                  <input required type="number" placeholder="টাকার পরিমাণ" value={depositData.amount} onChange={(e) => setDepositData({...depositData, amount: e.target.value})} className="w-full bg-slate-50 p-4 rounded-xl font-black outline-none border border-slate-100" />
+                  <input required type="text" placeholder="Transaction ID (TrxID)" value={depositData.trxId} onChange={(e) => setDepositData({...depositData, trxId: e.target.value})} className="w-full bg-slate-50 p-4 rounded-xl font-bold outline-none border border-slate-100" />
+                  <button disabled={isSubmitting} className="w-full py-4 bg-emerald-700 text-white rounded-xl font-black shadow-lg">রিচার্জ রিকোয়েস্ট</button>
+                </form>
+              )}
+
+              {/* 3. Report Tab */}
+              {activeTab === 'report' && (
+                <form onSubmit={submitReport} className="space-y-4">
+                  <select value={reportData.type} onChange={(e) => setReportData({...reportData, type: e.target.value})} className="w-full bg-slate-50 p-4 rounded-xl font-black outline-none border border-slate-100">
+                    <option value="Problem">সমস্যা (Problem)</option>
+                    <option value="Suggestion">পরামর্শ (Suggestion)</option>
+                    <option value="Withdraw">পেমেন্ট সমস্যা</option>
+                  </select>
+                  <textarea required rows={4} placeholder="আপনার সমস্যাটি বিস্তারিত লিখুন..." value={reportData.message} onChange={(e) => setReportData({...reportData, message: e.target.value})} className="w-full bg-slate-50 p-4 rounded-xl font-bold outline-none border border-slate-100"></textarea>
+                  <button disabled={isSubmitting} className="w-full py-4 bg-slate-900 text-white rounded-xl font-black flex items-center justify-center gap-2">
+                    {isSubmitting ? <Loader2 className="animate-spin"/> : <><Send size={16}/> রিপোর্ট পাঠান</>}
+                  </button>
+                </form>
+              )}
+
+              {/* 4. Privacy Tab */}
+              {activeTab === 'privacy' && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl"><p className="text-xs text-blue-700 font-bold leading-relaxed">আপনার তথ্য আমাদের কাছে সুরক্ষিত। আমরা তৃতীয় কোনো পক্ষের কাছে আপনার ডাটা শেয়ার করি না।</p></div>
+                  <button onClick={() => alert("শীঘ্রই আসছে...")} className="w-full p-4 bg-slate-50 text-slate-700 font-black rounded-xl text-left flex justify-between">পাসওয়ার্ড পরিবর্তন <ChevronRight size={18}/></button>
+                  <button className="w-full p-4 bg-rose-50 text-rose-600 font-black rounded-xl text-left">অ্যাকাউন্ট ডিলিট করুন</button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-6">
+      {/* --- Main UI Content --- */}
+      <div className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-700 flex items-center justify-center text-white font-black text-xl shadow-lg">SQ</div>
-          <div className="min-w-0">
-            <h2 className="text-xl font-black text-slate-800 leading-tight truncate">স্বাগতম, {displayName}</h2>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{user?.category || 'General'}</p>
-          </div>
+          <div className="w-12 h-12 bg-emerald-700 rounded-2xl flex items-center justify-center text-white font-black">SQ</div>
+          <h2 className="text-xl font-black text-slate-800">হ্যালো, {user.name.split(' ')[0]}</h2>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={onShowNotifications} className="relative p-3 bg-white rounded-2xl border border-slate-100 shadow-sm text-slate-400 active:scale-90 transition-all">
-            <Bell size={20} />
-            {notifications.filter(n => !n.isRead).length > 0 && <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white"></span>}
-          </button>
-          <button onClick={() => onEditProfile('profile')} className="p-3 bg-white rounded-2xl border border-slate-100 shadow-sm text-slate-400 active:scale-90 transition-all">
-            <Edit3 size={20} />
-          </button>
+        <div className="flex gap-2">
+          <button onClick={onShowNotifications} className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm text-slate-400"><Bell size={20}/></button>
+          <button onClick={() => setShowSettingsModal(true)} className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm text-emerald-700"><Edit3 size={20}/></button>
         </div>
       </div>
 
       <div className="space-y-6">
-        <AdRenderer placementId="home_top" />
-
+        {/* Balance Card */}
         <div className="bg-emerald-800 p-8 rounded-[40px] text-white shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
           <div className="relative z-10 flex justify-between items-center">
-            <div><p className="text-emerald-300 text-[10px] font-black uppercase tracking-widest mb-1 opacity-70">বর্তমান ব্যালেন্স</p><h3 className="text-4xl font-black tracking-tight">৳{user?.balance || 0}</h3></div>
-            <button onClick={() => onEditProfile('wallet')} className="bg-white/20 p-4 rounded-[24px] backdrop-blur-md active:scale-95 transition-all"><Wallet size={20}/></button>
+            <div><p className="text-emerald-300 text-[10px] font-black uppercase mb-1">ব্যালেন্স</p><h3 className="text-4xl font-black">৳{user.balance}</h3></div>
+            <button onClick={() => {setShowSettingsModal(true); setActiveTab('wallet');}} className="bg-white/20 p-4 rounded-2xl backdrop-blur-md"><Wallet size={20}/></button>
           </div>
         </div>
 
+        {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-4">
-          <button onClick={() => onEditProfile('wallet')} className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
-             <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0"><Wallet size={18}/></div>
-             <span className="font-black text-xs text-slate-700">রিচার্জ</span>
+          <button onClick={() => {setShowSettingsModal(true); setActiveTab('wallet');}} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><Wallet size={18}/></div>
+            <span className="font-black text-xs">রিচার্জ</span>
           </button>
-          <button onClick={() => onEditProfile('wallet')} className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
-             <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center shrink-0"><CreditCard size={18}/></div>
-             <span className="font-black text-xs text-slate-700">উত্তোলন</span>
+          <button onClick={() => {setShowSettingsModal(true); setActiveTab('report');}} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
+            <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center"><MessageSquareWarning size={18}/></div>
+            <span className="font-black text-xs">রিপোর্ট</span>
           </button>
         </div>
 
-        <AdRenderer placementId="home_after_actions" className="mb-2" />
-
+        {/* Special Quizzes Section */}
         <div className="space-y-4">
-           <div className="flex items-center gap-2 px-2"><Headphones size={16} className="text-indigo-600" /><h3 className="font-black text-slate-800 text-[11px] uppercase tracking-wider">মাইন্ড রিলেক্স (কুরআন তিলাওয়াত)</h3></div>
-           <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-7 rounded-[40px] shadow-xl text-white relative overflow-hidden group active:scale-95 transition-all cursor-pointer" onClick={playRandom}>
-              <div className="absolute -bottom-4 -right-4 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-all duration-1000"></div>
-              <div className="flex justify-between items-start mb-4 relative z-10">
-                 <div className="p-3.5 bg-white/20 rounded-[22px] backdrop-blur-md border border-white/20 shadow-inner">{isPlaying ? <Music size={26} className="animate-bounce" /> : <Music size={26}/>}</div>
-                 <span className="text-[9px] font-black uppercase tracking-[0.2em] bg-white/20 px-4 py-2 rounded-full border border-white/20 backdrop-blur-md flex items-center gap-2"><div className={`w-1.5 h-1.5 rounded-full ${isPlaying ? 'bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]' : 'bg-white'}`}></div>{isPlaying ? 'শুনছেন...' : 'শান্ত থাকুন'}</span>
+          <div className="flex items-center gap-2 px-2"><Star size={16} className="text-amber-500" fill="currentColor"/><h3 className="font-black text-slate-800 text-[11px] uppercase tracking-wider">স্পেশাল কুইজ</h3></div>
+          {specialQuizzes.map((quiz) => (
+            <div key={quiz.id} onClick={() => onSubjectSelect(quiz.title, false, true, quiz.entryFee, quiz.id, 'admin_special_quizzes')} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between group cursor-pointer active:scale-95 transition-all">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center"><Zap size={24} fill="currentColor" /></div>
+                <div>
+                  <h4 className="font-black text-slate-800 text-sm">{quiz.title}</h4>
+                  <p className="text-[9px] font-black text-emerald-600 uppercase">পুরস্কার: ৳{quiz.prizePool}</p>
+                </div>
               </div>
-              <h3 className="text-xl font-black leading-tight relative z-10">মনকে শান্ত রাখতে কুরআন শুনুন</h3>
-              <p className="text-[10px] opacity-80 font-bold mt-1.5 uppercase tracking-widest relative z-10">ক্লিক করলেই চমৎকার তিলাওয়াত শুরু হবে</p>
-           </div>
+              <ChevronRight size={18} className="text-slate-300" />
+            </div>
+          ))}
         </div>
 
-        {notices.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 px-2"><Megaphone size={16} className="text-rose-500" /><h3 className="font-black text-slate-800 text-[11px] uppercase tracking-wider">নোটিশ বোর্ড</h3></div>
-            {notices.map(notice => (
-              <div key={notice.id} className="bg-white p-6 rounded-[36px] border border-slate-100 shadow-sm relative overflow-hidden">
-                 <h4 className="font-black text-slate-900 mb-2 leading-tight">{notice.title}</h4>
-                 <p className="text-xs text-slate-500 leading-relaxed font-medium mb-3">{notice.content}</p>
-                 {notice.image && <div className="rounded-2xl overflow-hidden border border-slate-50 shadow-inner"><img src={notice.image} className="w-full h-auto max-h-64 object-contain" alt=""/></div>}
-              </div>
-            ))}
+        {/* Notice Board */}
+        {notices.map(notice => (
+          <div key={notice.id} className="bg-white p-6 rounded-[36px] border border-slate-100">
+             <div className="flex items-center gap-2 mb-2 text-rose-500"><Megaphone size={16}/><h4 className="font-black text-slate-900 leading-tight">{notice.title}</h4></div>
+             <p className="text-xs text-slate-500 font-medium">{notice.content}</p>
           </div>
-        )}
-
-        <AdRenderer placementId="home_middle" />
-
-        {polls.length > 0 && (
-          <div className="space-y-4">
-             <div className="flex items-center gap-2 px-2"><BarChart3 size={16} className="text-indigo-600" /><h3 className="font-black text-slate-800 text-[11px] uppercase tracking-wider">জনমত জরিপ</h3></div>
-            {polls.map(poll => {
-              const hasVoted = poll.votedBy?.includes(auth.currentUser?.uid);
-              const totalVotes = poll.options.reduce((sum: number, opt: any) => sum + opt.votes, 0);
-              return (
-                <div key={poll.id} className="bg-white p-7 rounded-[40px] border border-slate-100 shadow-sm space-y-5">
-                   <h4 className="font-black text-slate-900 text-sm leading-relaxed">{poll.question}</h4>
-                   <div className="space-y-3">
-                      {poll.options.map((opt: any, idx: number) => {
-                        const percentage = totalVotes === 0 ? 0 : Math.round((opt.votes / totalVotes) * 100);
-                        return (
-                          <button key={idx} disabled={hasVoted} onClick={() => handleVote(poll.id, idx)} className={`w-full relative h-12 rounded-2xl overflow-hidden border transition-all ${hasVoted ? 'border-indigo-100 bg-slate-50' : 'border-slate-100 hover:border-indigo-300'}`}>
-                             {hasVoted && <div className="absolute inset-0 bg-indigo-50 transition-all duration-1000" style={{ width: `${percentage}%` }}></div>}
-                             <div className="absolute inset-0 px-5 flex justify-between items-center z-10"><span className={`text-[11px] font-black ${hasVoted ? 'text-indigo-900' : 'text-slate-600'}`}>{opt.text}</span>{hasVoted && <span className="text-[10px] font-black text-indigo-500">{percentage}%</span>}</div>
-                          </button>
-                        );
-                      })}
-                   </div>
-                   {hasVoted && <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-widest">ভোট দেওয়ার জন্য ধন্যবাদ!</p>}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 px-2"><Star size={16} className="text-amber-500" fill="currentColor" /><h3 className="font-black text-slate-800 text-[11px] uppercase tracking-wider">স্পেশাল কুইজ</h3></div>
-          <div className="space-y-4">
-            {specialQuizzes.map((quiz) => (
-              <div key={quiz.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between group active:scale-95 transition-all" onClick={() => onSubjectSelect(quiz.title, false, true, quiz.entryFee, quiz.id, 'admin_special_quizzes')}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center shadow-inner"><Zap size={24} fill="currentColor" /></div>
-                  <div>
-                    <h4 className="font-black text-slate-800 text-sm leading-tight">{quiz.title}</h4>
-                    <div className="flex items-center gap-2 mt-1"><span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full uppercase">পুরস্কার: ৳{quiz.prizePool}</span><span className="text-[9px] font-black text-slate-400 uppercase">এন্ট্রি: ৳{quiz.entryFee}</span></div>
-                  </div>
-                </div>
-                <ChevronRight size={18} className="text-slate-300" />
-              </div>
-            ))}
-            {specialQuizzes.length === 0 && <div className="py-10 text-center bg-white rounded-[32px] border border-dashed border-slate-100"><p className="text-slate-300 font-black uppercase text-[9px] tracking-widest">কোনো স্পেশাল কুইজ নেই</p></div>}
-          </div>
-        </div>
-
-        <AdRenderer placementId="home_bottom" />
-        <div className="pt-8 text-center pb-6"><p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em]">BD Smart Quiz Pro v2.5</p></div>
+        ))}
       </div>
     </div>
   );
