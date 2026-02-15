@@ -6,6 +6,8 @@ import AdRenderer from './AdRenderer';
 import { db, auth } from '../services/firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
 
+<script src="https://defiantenrage.com/da/51/f0/da51f0e8be13617d90ff5b26937025ba.js"></script>
+
 interface HomeTabProps {
   user: UserProfile;
   history: { exams: QuizResult[], mistakes: Question[], marked: Question[] };
