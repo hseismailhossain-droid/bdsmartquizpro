@@ -1,4 +1,4 @@
-Import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, QuizResult, Question, Notification, Lesson } from '../types';
 import { Bell, Edit3, Wallet, CreditCard, Megaphone, BarChart3, Star, ChevronRight, Zap, CheckCircle2, Music, Pause, Play, X, Headphones } from 'lucide-react';
 import AdRenderer from './AdRenderer';
