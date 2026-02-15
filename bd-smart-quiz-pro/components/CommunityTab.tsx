@@ -19,8 +19,6 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { ADMIN_EMAIL } from '../constants';
 import AdRenderer from './AdRenderer';
 
-https://defiantenrage.com/r29staxe4?key=16f55b34cec622e9ffb37327506418bc
-
 // --- Components ---
 
 const CommunityConfirmModal = ({ show, title, message, onConfirm, onCancel, color = "rose", confirmText = "হ্যাঁ, নিশ্চিত করুন" }: any) => {
@@ -652,8 +650,6 @@ const CommunityTab: React.FC<{ user?: UserProfile }> = ({ user }) => {
                     });
                   }} />
               </div>
-
-https://defiantenrage.com/f3597f8c957d468959ac3821c42527b0/invoke.js
               
               {isRecording && (
                 <div className="mb-8 p-8 bg-rose-50 rounded-[44px] border border-rose-100 animate-in zoom-in-95 flex flex-col items-center gap-4">
@@ -698,9 +694,7 @@ https://defiantenrage.com/f3597f8c957d468959ac3821c42527b0/invoke.js
         </div>
       </div>
 
-      https://defiantenrage.com/ad/04/16/ad0416f282833e1de4ea3abee28eb897.js
-
-      {showComposer && (
+     {showComposer && (
         <div className="fixed inset-0 bg-white z-[6000] flex flex-col animate-in slide-in-from-bottom duration-500 overflow-hidden">
            <div className="p-4 border-b flex justify-between items-center bg-white/95 backdrop-blur-xl sticky top-0 safe-pt z-10 shrink-0">
               <button 
@@ -724,10 +718,7 @@ https://defiantenrage.com/f3597f8c957d468959ac3821c42527b0/invoke.js
               </div>
            </div>
           
-            https://defiantenrage.com/d07e9336b60580af4a3b18734a7dfd59/invoke.jshttps://defiantenrage.com/f3597f8c957d468959ac3821c42527b0/invoke.js
-
-          
-           <div className="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar">
               <textarea 
                 className="w-full text-lg font-bold text-slate-800 placeholder-slate-300 outline-none resize-none min-h-[200px]" 
                 placeholder="এখানে আপনার মনের কথাগুলো লিখুন..." 
@@ -736,9 +727,7 @@ https://defiantenrage.com/f3597f8c957d468959ac3821c42527b0/invoke.js
                 onChange={e => setPostContent(e.target.value)} 
               />
            </div>
-          
-           https://defiantenrage.com/61/65/8c/61658ca0d6b568fc54ac8518d329592f.js
-          
+        
            <div className="p-6 bg-slate-50 border-t flex items-center justify-center safe-pb flex-col gap-4 shrink-0">
               <div className="flex gap-4 w-full">
                 <button 
