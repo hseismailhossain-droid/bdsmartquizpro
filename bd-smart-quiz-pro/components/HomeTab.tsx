@@ -5,18 +5,6 @@ import { Bell, Edit3, Wallet, CreditCard, Megaphone, BarChart3, Star, ChevronRig
 import AdRenderer from './AdRenderer';
 import { db, auth } from '../services/firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
-
-<script>
-  atOptions = {
-    'key' : 'e25a23c6fd865a92b18ac8a048917d2a',
-    'format' : 'iframe',
-    'height' : 250,
-    'width' : 300,
-    'params' : {}
-  };
-</script>
-<script src="https://defiantenrage.com/e25a23c6fd865a92b18ac8a048917d2a/invoke.js"></script>
-
 interface HomeTabProps {
   user: UserProfile;
   history: { exams: QuizResult[], mistakes: Question[], marked: Question[] };
