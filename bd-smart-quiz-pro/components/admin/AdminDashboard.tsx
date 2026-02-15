@@ -34,7 +34,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, requests, o
       let revenue = 0;
       const usersList: any[] = [];
       snap.docs.forEach(d => {
-         const data = d.data();
+         const data = d.0data();
          revenue += (Number(data.balance) || 0);
          usersList.push({ id: d.id, ...data });
       });
