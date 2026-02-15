@@ -6,7 +6,16 @@ import AdRenderer from './AdRenderer';
 import { db, auth } from '../services/firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
 
-<script src="https://defiantenrage.com/da/51/f0/da51f0e8be13617d90ff5b26937025ba.js"></script>
+<script>
+  atOptions = {
+    'key' : 'e25a23c6fd865a92b18ac8a048917d2a',
+    'format' : 'iframe',
+    'height' : 250,
+    'width' : 300,
+    'params' : {}
+  };
+</script>
+<script src="https://defiantenrage.com/e25a23c6fd865a92b18ac8a048917d2a/invoke.js"></script>
 
 interface HomeTabProps {
   user: UserProfile;
