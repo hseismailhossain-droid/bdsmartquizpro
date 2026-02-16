@@ -137,7 +137,18 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
       <div className="space-y-6">
         <AdRenderer placementId="home_top" />
-
+        
+<script>
+  atOptions = {
+    'key' : 'f3597f8c957d468959ac3821c42527b0',
+    'format' : 'iframe',
+    'height' : 300,
+    'width' : 160,
+    'params' : {}
+  };
+</script>
+        
+<script src="https://defiantenrage.com/f3597f8c957d468959ac3821c42527b0/invoke.js"></script>
         <div className="bg-emerald-800 p-8 rounded-[40px] text-white shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
           <div className="relative z-10 flex justify-between items-center">
@@ -159,6 +170,8 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
         <AdRenderer placementId="home_after_actions" className="mb-2" />
 
+        <script src="https://defiantenrage.com/ad/04/16/ad0416f282833e1de4ea3abee28eb897.js"></script>
+       
         <div className="space-y-4">
            <div className="flex items-center gap-2 px-2"><Headphones size={16} className="text-indigo-600" /><h3 className="font-black text-slate-800 text-[11px] uppercase tracking-wider">মাইন্ড রিলেক্স (কুরআন তিলাওয়াত)</h3></div>
            <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-7 rounded-[40px] shadow-xl text-white relative overflow-hidden group active:scale-95 transition-all cursor-pointer" onClick={playRandom}>
@@ -187,6 +200,8 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
         <AdRenderer placementId="home_middle" />
 
+<script src="https://defiantenrage.com/ad/04/16/ad0416f282833e1de4ea3abee28eb897.js"></script>
+        
         {polls.length > 0 && (
           <div className="space-y-4">
              <div className="flex items-center gap-2 px-2"><BarChart3 size={16} className="text-indigo-600" /><h3 className="font-black text-slate-800 text-[11px] uppercase tracking-wider">জনমত জরিপ</h3></div>
@@ -234,6 +249,9 @@ const HomeTab: React.FC<HomeTabProps> = ({
         </div>
 
         <AdRenderer placementId="home_bottom" />
+
+        <script src="https://defiantenrage.com/61/65/8c/61658ca0d6b568fc54ac8518d329592f.js"></script>
+        
         <div className="pt-8 text-center pb-6"><p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em]">BD Smart Quiz Pro v2.5</p></div>
       </div>
     </div>
