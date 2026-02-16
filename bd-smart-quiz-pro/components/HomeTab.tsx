@@ -151,7 +151,6 @@ const HomeTab: React.FC<HomeTabProps> = ({
   };
 }, []);
         
-<script src="https://defiantenrage.com/f3597f8c957d468959ac3821c42527b0/invoke.js"></script>
         <div className="bg-emerald-800 p-8 rounded-[40px] text-white shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
           <div className="relative z-10 flex justify-between items-center">
