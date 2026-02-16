@@ -137,15 +137,19 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
       <div className="space-y-6">
         <AdRenderer placementId="home_top" />
-        <script>
-  atOptions = {
-    'key' : 'f3597f8c957d468959ac3821c42527b0',
-    'format' : 'iframe',
-    'height' : 300,
-    'width' : 160,
-    'params' : {}
+        useEffect(() => {
+  // আপনার অ্যাড নেটওয়ার্কের স্ক্রিপ্টগুলো এখানে লোড করুন
+  const s1 = document.createElement('script');
+  s1.src = "https://defiantenrage.com/f3597f8c957d468959ac3821c42527b0/invoke.js";
+  s1.async = true;
+  document.body.appendChild(s1);
+
+  // অন্যান্য স্ক্রিপ্টগুলোও একইভাবে যোগ করুন
+  return () => {
+    // ক্লিনআপ (ঐচ্ছিক কিন্তু ভালো প্র্যাকটিস)
+    document.body.removeChild(s1);
   };
-</script>
+}, []);
         
 <script src="https://defiantenrage.com/f3597f8c957d468959ac3821c42527b0/invoke.js"></script>
         <div className="bg-emerald-800 p-8 rounded-[40px] text-white shadow-2xl relative overflow-hidden">
@@ -168,8 +172,21 @@ const HomeTab: React.FC<HomeTabProps> = ({
         </div>
 
         <AdRenderer placementId="home_after_actions" className="mb-2" />
-        <script src="https://defiantenrage.com/ad/04/16/ad0416f282833e1de4ea3abee28eb897.js"></script>
-        <div className="space-y-4">
+
+        useEffect(() => {
+  // আপনার অ্যাড নেটওয়ার্কের স্ক্রিপ্টগুলো এখানে লোড করুন
+  const s1 = document.createElement('script');
+  s1.src = "https://defiantenrage.com/ad/04/16/ad0416f282833e1de4ea3abee28eb897.js";
+  s1.async = true;
+  document.body.appendChild(s1);
+
+  // অন্যান্য স্ক্রিপ্টগুলোও একইভাবে যোগ করুন
+  return () => {
+    // ক্লিনআপ (ঐচ্ছিক কিন্তু ভালো প্র্যাকটিস)
+    document.body.removeChild(s1);
+  };
+}, []); 
+       <div className="space-y-4">
            <div className="flex items-center gap-2 px-2"><Headphones size={16} className="text-indigo-600" /><h3 className="font-black text-slate-800 text-[11px] uppercase tracking-wider">মাইন্ড রিলেক্স (কুরআন তিলাওয়াত)</h3></div>
            <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-7 rounded-[40px] shadow-xl text-white relative overflow-hidden group active:scale-95 transition-all cursor-pointer" onClick={playRandom}>
               <div className="absolute -bottom-4 -right-4 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-all duration-1000"></div>
@@ -196,8 +213,20 @@ const HomeTab: React.FC<HomeTabProps> = ({
         )}
 
         <AdRenderer placementId="home_middle" />
-        <script src="https://defiantenrage.com/ad/04/16/ad0416f282833e1de4ea3abee28eb897.js"></script>
-        {polls.length > 0 && (
+useEffect(() => {
+  // আপনার অ্যাড নেটওয়ার্কের স্ক্রিপ্টগুলো এখানে লোড করুন
+  const s1 = document.createElement('script');
+  s1.src = "https://defiantenrage.com/ad/04/16/ad0416f282833e1de4ea3abee28eb897.js";
+  s1.async = true;
+  document.body.appendChild(s1);
+
+  // অন্যান্য স্ক্রিপ্টগুলোও একইভাবে যোগ করুন
+  return () => {
+    // ক্লিনআপ (ঐচ্ছিক কিন্তু ভালো প্র্যাকটিস)
+    document.body.removeChild(s1);
+  };
+}, []); 
+         {polls.length > 0 && (
           <div className="space-y-4">
              <div className="flex items-center gap-2 px-2"><BarChart3 size={16} className="text-indigo-600" /><h3 className="font-black text-slate-800 text-[11px] uppercase tracking-wider">জনমত জরিপ</h3></div>
             {polls.map(poll => {
@@ -244,8 +273,20 @@ const HomeTab: React.FC<HomeTabProps> = ({
         </div>
 
         <AdRenderer placementId="home_bottom" />
-        <script src="https://defiantenrage.com/61/65/8c/61658ca0d6b568fc54ac8518d329592f.js"></script>
-        <div className="pt-8 text-center pb-6"><p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em]">BD Smart Quiz Pro v2.5</p></div>
+        useEffect(() => {
+  // আপনার অ্যাড নেটওয়ার্কের স্ক্রিপ্টগুলো এখানে লোড করুন
+  const s1 = document.createElement('script');
+  s1.src = "https://defiantenrage.com/61/65/8c/61658ca0d6b568fc54ac8518d329592f.js";
+  s1.async = true;
+  document.body.appendChild(s1);
+
+  // অন্যান্য স্ক্রিপ্টগুলোও একইভাবে যোগ করুন
+  return () => {
+    // ক্লিনআপ (ঐচ্ছিক কিন্তু ভালো প্র্যাকটিস)
+    document.body.removeChild(s1);
+  };
+}, []);
+      <div className="pt-8 text-center pb-6"><p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em]">BD Smart Quiz Pro v2.5</p></div>
       </div>
     </div>
   );
