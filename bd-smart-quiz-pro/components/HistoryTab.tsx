@@ -204,9 +204,6 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ history }) => {
     </div>
   );
 
-<script async="async" data-cfasync="false" src="https://defiantenrage.com/d07e9336b60580af4a3b18734a7dfd59/invoke.js"></script>
-<div id="container-d07e9336b60580af4a3b18734a7dfd59"></div>
-  
   return (
     <div className="flex flex-col h-full bg-slate-50/30 font-hind overflow-hidden relative">
       <ConfirmModal 
