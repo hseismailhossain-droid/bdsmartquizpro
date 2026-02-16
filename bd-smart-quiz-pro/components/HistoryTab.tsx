@@ -160,10 +160,6 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ history }) => {
             <p className="text-[9px] text-emerald-600 font-black uppercase tracking-widest mt-1.5">রেজাল্ট ও ইভালুয়েশন</p>
           </div>
        </div>
-
-<script async="async" data-cfasync="false" src="https://defiantenrage.com/d07e9336b60580af4a3b18734a7dfd59/invoke.js"></script>
-<div id="container-d07e9336b60580af4a3b18734a7dfd59"></div>
-      
        <div className="flex-1 overflow-y-auto no-scrollbar p-6 pb-20 space-y-8">
           <div className="bg-emerald-900 p-10 rounded-[44px] text-white shadow-xl relative overflow-hidden text-center">
              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
