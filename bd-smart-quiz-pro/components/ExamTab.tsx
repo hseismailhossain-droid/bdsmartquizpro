@@ -12,8 +12,6 @@ import { collection, onSnapshot, query, doc, where, orderBy, limit } from 'fireb
 import PuzzlesTab from './PuzzlesTab';
 import AdRenderer from './AdRenderer';
 
-<a>https://defiantenrage.com/r29staxe4?key=16f55b34cec622e9ffb37327506418bc</a>
-
 interface ExamTabProps {
   user: UserProfile;
   onSubjectSelect: (subject: string, isLive: boolean, isPaid?: boolean, entryFee?: number, quizId?: string, collectionName?: string, isWritten?: boolean) => void;
