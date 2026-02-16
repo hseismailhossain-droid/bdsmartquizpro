@@ -19,8 +19,6 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { ADMIN_EMAIL } from '../constants';
 import AdRenderer from './AdRenderer';
 
-<script src="https://defiantenrage.com/61/65/8c/61658ca0d6b568fc54ac8518d329592f.js"></script>
-
 // --- Components ---
 
 const CommunityConfirmModal = ({ show, title, message, onConfirm, onCancel, color = "rose", confirmText = "হ্যাঁ, নিশ্চিত করুন" }: any) => {
